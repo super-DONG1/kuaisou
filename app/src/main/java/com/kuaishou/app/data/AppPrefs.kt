@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.map
 
 private val Context.dataStore by preferencesDataStore(name = "kuaishou_prefs")
 
-/** 本地偏好：默认/上次平台、启用平台顺序、最近搜索、唤起偏好。 */
+/** 本地偏好：默认/上次平台、启用平台顺序、最近搜索、唤起偏好、协议同意状态。 */
 class AppPrefs(private val context: Context) {
 
     private val keyDefaultPlatform = stringPreferencesKey("default_platform")
@@ -18,6 +18,7 @@ class AppPrefs(private val context: Context) {
     private val keyEnabledOrder = stringPreferencesKey("enabled_order")
     private val keyHistory = stringPreferencesKey("history")
     private val keyPreferLaunchApp = booleanPreferencesKey("prefer_launch_app")
+    private val keyAgreementAccepted = booleanPreferencesKey("agreement_accepted")
 
     val defaultPlatformId: Flow<String?> =
         context.dataStore.data.map { it[keyDefaultPlatform] }
@@ -39,6 +40,14 @@ class AppPrefs(private val context: Context) {
 
     val preferLaunchApp: Flow<Boolean> =
         context.dataStore.data.map { it[keyPreferLaunchApp] ?: true }
+
+    /** 用户是否已同意用户协议与隐私说明（首次启动弹窗；可在关于页撤回）。 */
+    val agreementAccepted: Flow<Boolean> =
+        context.dataStore.data.map { it[keyAgreementAccepted] ?: false }
+
+    suspend fun setAgreementAccepted(accepted: Boolean) {
+        context.dataStore.edit { it[keyAgreementAccepted] = accepted }
+    }
 
     suspend fun setDefaultPlatform(id: String) {
         context.dataStore.edit { it[keyDefaultPlatform] = id }
