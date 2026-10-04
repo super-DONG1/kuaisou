@@ -18,6 +18,8 @@ android {
     buildTypes {
         release {
             isMinifyEnabled = false
+            // 个人发布：使用 debug 证书签名，产物可直接安装并上传 GitHub Release
+            signingConfig = signingConfigs.getByName("debug")
         }
     }
 
