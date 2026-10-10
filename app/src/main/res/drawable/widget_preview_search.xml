@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4×1 搜索栏小组件静态预览图（深色毛玻璃风，适配系统添加页）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="96dp"
+    android:viewportWidth="400"
+    android:viewportHeight="96">
+
+    <!-- 卡片底：半透明深色 + 淡描边 -->
+    <path
+        android:pathData="M3,21 a18,18 0 0 1 18,-18 h358 a18,18 0 0 1 18,18 v54 a18,18 0 0 1 -18,18 h-358 a18,18 0 0 1 -18,-18 Z"
+        android:fillColor="#CC1B1F2A"
+        android:strokeColor="#40FFFFFF"
+        android:strokeWidth="2" />
+
+    <!-- 左侧伪搜索框 -->
+    <path
+        android:pathData="M16,40 a12,12 0 0 1 12,-12 h152 a12,12 0 0 1 12,12 v16 a12,12 0 0 1 -12,12 h-152 a12,12 0 0 1 -12,-12 Z"
+        android:fillColor="#FF2A2F3A" />
+
+    <!-- 放大镜 -->
+    <path
+        android:pathData="M35,48 a7,7 0 1 0 14,0 a7,7 0 1 0 -14,0 Z"
+        android:fillColor="#00000000"
+        android:strokeColor="#FFC8CCD4"
+        android:strokeWidth="2" />
+    <path
+        android:pathData="M49,55 L56,62"
+        android:strokeColor="#FFC8CCD4"
+        android:strokeWidth="3"
+        android:strokeLineCap="round" />
+
+    <!-- 占位文字条 -->
+    <path
+        android:pathData="M62,48 a6,6 0 0 1 6,-6 h106 a6,6 0 0 1 6,6 v0 a6,6 0 0 1 -6,6 h-106 a6,6 0 0 1 -6,-6 Z"
+        android:fillColor="#38FFFFFF" />
+
+    <!-- 右侧 3 个平台图标 -->
+    <path
+        android:pathData="M237,48 a15,15 0 1 0 30,0 a15,15 0 1 0 -30,0 Z"
+        android:fillColor="#FF2932E1" />
+    <path
+        android:pathData="M297,48 a15,15 0 1 0 30,0 a15,15 0 1 0 -30,0 Z"
+        android:fillColor="#FFFB7299" />
+    <path
+        android:pathData="M357,48 a15,15 0 1 0 30,0 a15,15 0 1 0 -30,0 Z"
+        android:fillColor="#FF25F4EE" />
+</vector>
