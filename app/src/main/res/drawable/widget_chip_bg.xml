@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <corners android:radius="14dp" />
+    <!-- 极浅降噪：10% 白色，深/浅主题下都只留极淡的浅灰胶囊，不抢视觉重心 -->
+    <solid android:color="#1AFFFFFF" />
+</shape>

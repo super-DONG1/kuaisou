@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 小组件搜索栏右侧图标间的等距分隔（透明，宽 12dp），用于 LinearLayout showDividers=middle -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <size android:width="10dp" android:height="1dp" />
+</shape>
