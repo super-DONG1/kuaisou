@@ -1,4 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">快搜</string>
+    <string name="widget_description">快搜快捷搜索：点平台直接搜索</string>
+    <string name="widget_search_desc">搜索栏：点输入框或图标直接搜</string>
+    <string name="widget_2x2_desc">2×2 迷你网格：常用 4 平台</string>
+    <string name="widget_4x2_desc">4×2 标准网格：常用 8 平台</string>
+    <string name="widget_4x4_desc">4×4 全功能面板：搜索框 + 平台 + 最近</string>
 </resources>

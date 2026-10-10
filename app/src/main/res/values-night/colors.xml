@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- 小组件 MIUIX 风格配色（深色） -->
+    <color name="widget_card">#B31C1C1E</color>
+    <color name="widget_bar_bg">#2A2A2C</color>
+    <color name="widget_text">#E6E6E6</color>
+    <color name="widget_subtext">#8A8A8A</color>
+    <color name="widget_label">#777777</color>
+    <color name="widget_accent">#5B9DFF</color>
+</resources>
