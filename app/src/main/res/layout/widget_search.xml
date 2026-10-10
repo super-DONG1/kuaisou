@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4x1 搜索栏：左搜索框精确占 1/2，右图标区占 1/2，左右垂直绝对居中、等距不挤压 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_card_bg"
+    android:padding="12dp"
+    android:gravity="center_vertical">
+
+    <!-- 左侧伪搜索框：占 1/2，固定 36dp 高（与右侧图标方块同高，视觉份量一致），极浅灰胶囊底、全圆角。
+         之前是 match_parent 撑满整格高度，导致胶囊比 32dp 图标高出一截、左右失衡；固定高度后两端与图标对齐居中。 -->
+    <LinearLayout
+        android:id="@+id/widget_bar"
+        android:layout_width="0dp"
+        android:layout_height="36dp"
+        android:layout_weight="1"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:background="@drawable/widget_searchbar_bg"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <ImageView
+            android:layout_width="18dp"
+            android:layout_height="18dp"
+            android:src="@drawable/ic_search"
+            android:tint="#999999"
+            android:scaleType="fitCenter" />
+
+        <TextView
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:layout_marginStart="6dp"
+            android:text="搜点什么"
+            android:textSize="12sp"
+            android:textColor="#888888"
+            android:singleLine="true"
+            android:ellipsize="end" />
+    </LinearLayout>
+
+    <!-- 右侧图标区：宽度 wrap_content（NOT 0dp+weight=1）。
+         之前与左侧搜索框各占 1/2 宽度，而 3 个 36dp 图标 + 2 个 10dp 间隔 ≈ 128dp 已超过右半区可用宽度，
+         LinearLayout 不会换行只会裁切，导致第 3 个图标被切掉。改为 wrap_content 后图标区按内容收缩、
+         剩余宽度全部让给搜索框，图标数量变化也不会被裁。间隔由 showDividers=middle 统一提供。 -->
+    <LinearLayout
+        android:id="@+id/widget_icons"
+        android:layout_width="wrap_content"
+        android:layout_height="match_parent"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:divider="@drawable/widget_icon_spacer"
+        android:showDividers="middle"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp" />
+</LinearLayout>
