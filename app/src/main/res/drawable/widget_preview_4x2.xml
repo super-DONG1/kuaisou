@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 4×2 标准网格小组件静态预览图（深色毛玻璃风，适配系统添加页）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="400dp"
+    android:height="200dp"
+    android:viewportWidth="400"
+    android:viewportHeight="200">
+
+    <!-- 卡片底 -->
+    <path
+        android:pathData="M4,24 a20,20 0 0 1 20,-20 h352 a20,20 0 0 1 20,20 v152 a20,20 0 0 1 -20,20 h-352 a20,20 0 0 1 -20,-20 Z"
+        android:fillColor="#CC1B1F2A"
+        android:strokeColor="#40FFFFFF"
+        android:strokeWidth="2" />
+
+    <!-- 第 1 行 -->
+    <path android:pathData="M20,34 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FF2932E1" />
+    <path android:pathData="M32,96 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M116,34 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FFFB7299" />
+    <path android:pathData="M128,96 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M212,34 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FF25F4EE" />
+    <path android:pathData="M224,96 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M308,34 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FFFF6A00" />
+    <path android:pathData="M320,96 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <!-- 第 2 行 -->
+    <path android:pathData="M20,130 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FFE6162D" />
+    <path android:pathData="M32,192 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M116,130 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FFFF2442" />
+    <path android:pathData="M128,192 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M212,130 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FF0084FF" />
+    <path android:pathData="M224,192 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M308,130 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FFE1251B" />
+    <path android:pathData="M320,192 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+</vector>

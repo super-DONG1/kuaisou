@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<shape xmlns:android="http://schemas.android.com/apk/res/android"
+    android:shape="rectangle">
+    <!-- 全圆角胶囊：搜索框高度固定 36dp，半径取一半即 18dp 形成规整药丸形，
+         与外层卡片（24dp 柔和圆角）同属「圆润」语言，整体协调。 -->
+    <corners android:radius="18dp" />
+    <!-- 复用统一的浅灰胶囊色 token，避免与 widget_bar_bg 硬编码数值产生偏差 -->
+    <solid android:color="@color/widget_bar_bg" />
+</shape>

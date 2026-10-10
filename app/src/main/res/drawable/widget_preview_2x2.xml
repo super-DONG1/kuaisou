@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2×2 迷你网格小组件静态预览图（深色毛玻璃风，适配系统添加页）。 -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="200dp"
+    android:height="200dp"
+    android:viewportWidth="200"
+    android:viewportHeight="200">
+
+    <!-- 卡片底 -->
+    <path
+        android:pathData="M4,24 a20,20 0 0 1 20,-20 h152 a20,20 0 0 1 20,20 v152 a20,20 0 0 1 -20,20 h-152 a20,20 0 0 1 -20,-20 Z"
+        android:fillColor="#CC1B1F2A"
+        android:strokeColor="#40FFFFFF"
+        android:strokeWidth="2" />
+
+    <!-- 2×2 平台图标 + 标签条 -->
+    <path android:pathData="M24,38 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FF2932E1" />
+    <path android:pathData="M36,100 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M112,38 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FFFB7299" />
+    <path android:pathData="M124,100 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M24,126 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FF25F4EE" />
+    <path android:pathData="M36,188 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+
+    <path android:pathData="M112,126 a14,14 0 0 1 14,-14 h36 a14,14 0 0 1 14,14 v36 a14,14 0 0 1 -14,14 h-36 a14,14 0 0 1 -14,-14 Z" android:fillColor="#FFFF6A00" />
+    <path android:pathData="M124,188 a4,4 0 0 1 4,-4 h32 a4,4 0 0 1 4,4 v0 a4,4 0 0 1 -4,4 h-32 a4,4 0 0 1 -4,-4 Z" android:fillColor="#2EFFFFFF" />
+</vector>
