@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 2x2 / 4x2 宫格容器：大圆角毛玻璃卡片，内边距收紧，点击空白区域拉起 App 默认平台 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:orientation="vertical"
+    android:background="@drawable/widget_card_bg"
+    android:padding="8dp"
+    android:gravity="center">
+
+    <!-- 占满卡片高度，内部各行以 weight=1 均分，保证不同屏幕尺寸/密度下都不溢出、对齐一致 -->
+    <LinearLayout
+        android:id="@+id/widget_grid"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:orientation="vertical"
+        android:gravity="center" />
+</LinearLayout>

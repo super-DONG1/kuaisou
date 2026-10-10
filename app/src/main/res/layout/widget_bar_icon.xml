@@ -1,0 +1,19 @@
+<!-- 4x1 右侧栏的独立图标项：纯图标 36dp 1:1，无底座无文字。
+     关键 1：宽度固定 36dp（NOT layout_weight），避免 RemoteViews 对动态子项权重不稳定导致塌缩/重叠。
+     关键 2：不要再加 layout_marginEnd —— 父容器 widget_icons 已用 showDividers=middle + 10dp 分隔
+     drawable 负责等距，重复加间距会导致图标区超出分配宽度而被右侧裁切。
+     右侧容器为 wrap_content，图标区按内容宽度收缩，剩余宽度全部留给左侧搜索框，任何图标数量都不会被裁。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_icon"
+    android:layout_width="36dp"
+    android:layout_height="match_parent"
+    android:orientation="horizontal"
+    android:gravity="center">
+
+    <ImageView
+        android:id="@+id/widget_icon_img"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:scaleType="fitCenter"
+        android:adjustViewBounds="true" />
+</LinearLayout>

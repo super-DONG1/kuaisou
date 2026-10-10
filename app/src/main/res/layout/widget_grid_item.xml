@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 平台宫格单元（仅图标、不显示名称）：weight=1 等分列宽、match_parent 撑满行高。
+     图标不写死 dp，而是通过「0dp + weight=1 的 FrameLayout 占满单元格剩余空间 + fitCenter」
+     自适应缩放：2×2 卡片内高仅 94dp，展示 4 个（2 行）时每格约 47dp、展示 6 个（3 行）时每格仅约 31dp，
+     若图标固定 32dp，3 行时会被行高裁切；自适应后两种数量都能完整显示且水平垂直居中、无裁切。
+     内边距固定 4dp 并在 XML 中静态声明：原先用 RemoteViews.setViewPadding 动态下发，
+     但该 API 仅 API 31+ 可用，而本项目 minSdk 24，会在 Android 7.0~11 上抛 NoSuchMethodError。 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_item"
+    android:layout_width="0dp"
+    android:layout_height="match_parent"
+    android:layout_weight="1"
+    android:orientation="vertical"
+    android:gravity="center"
+    android:padding="4dp">
+
+    <FrameLayout
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <ImageView
+            android:id="@+id/widget_item_icon"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:scaleType="fitCenter" />
+
+        <!-- 自定义平台无内置图标时的占位（取名称首字母），与真实图标互斥显示 -->
+        <TextView
+            android:id="@+id/widget_item_icon_text"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textSize="14sp"
+            android:textColor="@color/widget_label"
+            android:visibility="gone" />
+    </FrameLayout>
+</LinearLayout>

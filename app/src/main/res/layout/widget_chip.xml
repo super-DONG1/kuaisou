@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 最近搜索标签：极浅 10% 白胶囊，加大内边距以压住面板底部视觉重心 -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/widget_chip"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:orientation="horizontal"
+    android:background="@drawable/widget_chip_bg"
+    android:paddingStart="10dp"
+    android:paddingEnd="10dp"
+    android:paddingTop="7dp"
+    android:paddingBottom="7dp"
+    android:layout_marginEnd="6dp">
+
+    <TextView
+        android:id="@+id/widget_chip_text"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:textSize="10sp"
+        android:textColor="@color/widget_label"
+        android:singleLine="true"
+        android:ellipsize="end"
+        android:maxWidth="56dp"
+        android:includeFontPadding="false" />
+</LinearLayout>
