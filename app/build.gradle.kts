@@ -11,13 +11,21 @@ android {
         applicationId = "com.kuaishou.app"
         minSdk = 24
         targetSdk = 37
-        versionCode = 1
-        versionName = "1.0.0"
+        // 版本号规则：MAJOR.MINOR.PATCH-MMDD（如 2.0.2-1010）
+        // versionCode 取 MAJOR*1000000 + MINOR*1000 + PATCH，保证随版本号单调递增
+        versionCode = 2000002
+        versionName = "2.0.2-1010"
     }
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // 开启 R8 代码压缩 + 资源压缩：降低「安装后占用」
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro",
+            )
             // 个人发布：使用 debug 证书签名，产物可直接安装并上传 GitHub Release
             signingConfig = signingConfigs.getByName("debug")
         }
@@ -30,6 +38,8 @@ android {
 
     buildFeatures {
         compose = true
+        // 生成 BuildConfig，供 AppVersion 统一读取版本号
+        buildConfig = true
     }
 }
 
@@ -43,6 +53,9 @@ dependencies {
     // Compose 由 Miuix 0.9.4 传递引入（1.12.0），显式声明与之同版本
     implementation("androidx.compose.ui:ui:1.12.0")
     implementation("androidx.compose.foundation:foundation:1.12.0")
+
+    // Miuix 0.9.4 弹窗/抽屉组件依赖 NavigationBackHandler，需要显式提供该运行库
+    implementation("androidx.navigationevent:navigationevent-compose:1.1.2")
 
     // Miuix (HyperOS design language) 0.9.4
     implementation("top.yukonga.miuix.kmp:miuix-ui-android:0.9.4")
