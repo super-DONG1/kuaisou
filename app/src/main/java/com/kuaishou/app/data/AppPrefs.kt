@@ -1,414 +1,652 @@
 package com.kuaishou.app.data
 
 import android.content.Context
-import android.content.SharedPreferences
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import androidx.datastore.preferences.core.edit
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.longPreferencesKey
+import androidx.datastore.preferences.preferencesDataStore
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
+import org.json.JSONArray
+import org.json.JSONObject
 
-// ---------- 用户协议 / 隐私政策正文 ----------
+private val Context.dataStore by preferencesDataStore(name = "kuaishou_prefs")
 
-const val USER_AGREEMENT = """
-《快搜用户协议》
-
-欢迎使用快搜。本协议是你（以下称“用户”或“你”）与快搜应用（以下称“本应用”或“我们”）之间就下载、安装、使用本应用所订立的协议。
-
-一、服务说明
-1. 本应用是一个本地搜索跳转工具，帮助你在抖音、小红书、哔哩哔哩等平台之间快速发起搜索。
-2. 本应用不提供任何内容存储服务，不展示信息流，也不参与平台内容运营。
-
-二、账号与使用
-1. 本应用不需要注册账号，无需登录即可使用全部功能。
-2. 你应合法合规地使用本应用，不得利用本应用从事任何违反法律法规的活动。
-
-三、跳转服务
-1. 本应用通过各平台的官方或公开的跳转协议（Deep Link）发起搜索，跳转能力取决于你设备上安装的对应应用及其版本。
-2. 若对应应用未安装或跳转协议失效，本应用会提供网页版搜索作为兜底方案。
-
-四、隐私保护
-你的全部数据（搜索历史、平台偏好等）仅保存在你的设备本地，我们不对其进行收集、上传或分析。详见《隐私政策》。
-
-五、免责声明
-1. 本应用按“现状”提供，不对跳转成功率、目标应用兼容性作任何明示或默示的保证。
-2. 因使用本应用产生的任何直接或间接损失，我们不承担法律责任（法律另有规定的除外）。
-
-六、协议变更
-我们可能适时修订本协议，修订后将在应用内展示。继续使用即视为接受修订后的协议。
-"""
-
-const val PRIVACY_POLICY = """
-《快搜隐私政策》
-
-我们非常重视你的隐私。本政策说明本应用如何处理你的信息。
-
-一、我们不收集的信息
-1. 我们不设服务器，不收集任何搜索词。
-2. 我们不收集你的身份信息、位置信息、设备标识（如 IMEI、OAID）。
-3. 我们不使用任何统计 SDK 或广告 SDK。
-
-二、仅保存在本地的数据
-以下数据仅保存在你的设备本地，不上传、不共享：
-1. 搜索历史与最近搜索记录；
-2. 平台显示/排序偏好；
-3. 默认平台、主题外观等设置项；
-4. 你的自定义平台配置。
-
-三、剪贴板与跳转
-1. 当你使用“复制关键词”功能时，本应用会向系统剪贴板写入关键词，该操作仅在你主动触发时进行。
-2. 本应用启动其他应用（如抖音、小红书）时，仅传递你输入的搜索关键词，不读取目标应用内数据。
-
-四、第三方
-本应用跳转到的各平台 App 及其网页版分别适用各自的隐私政策，与本应用无关。
-
-五、未成年人保护
-本应用不针对未成年人提供服务，若你为未成年人，请在监护人指导下使用。
-
-六、联系我们
-如你对本政策有任何疑问，可通过应用内“问题反馈”渠道联系我们。
-"""
-
-// ---------- 偏好键名（单一来源，避免散落的魔法字符串） ----------
-
-const val KEY_DEFAULT_PLATFORM = "default_platform"
-const val KEY_ENABLED_PLATFORMS = "enabled_platforms"
-const val KEY_CUSTOM_PLATFORMS = "custom_platforms"
-const val KEY_HISTORY = "history"
-const val KEY_PLATFORM_CLICKS = "platform_clicks"
-const val KEY_THEME_MODE = "theme_mode"
-const val KEY_JUMP_MODE = "jump_mode"
-const val KEY_HAptics_ENABLED = "haptics_enabled"
-const val KEY_AUTO_OPEN_APP = "auto_open_app"
-const val KEY_AGREEMENT_ACCEPTED = "agreement_accepted"
-const val KEY_UPDATE_CHECK_INTERVAL = "update_check_interval"
-const val KEY_LAST_UPDATE_CHECK = "last_update_check"
-const val KEY_SHOW_WIDGET_KEYBOARD = "show_widget_keyboard"
-const val KEY_WIDGET_PLATFORMS_4X1 = "widget_platforms_4x1"
-const val KEY_WIDGET_PLATFORMS_2X2 = "widget_platforms_2x2"
-const val KEY_WIDGET_PLATFORMS_4X2 = "widget_platforms_4x2"
-
-// ---------- 枚举取值（与偏好存储值对应） ----------
-
+/** 主题外观：system / light / dark。 */
 const val THEME_SYSTEM = "system"
 const val THEME_LIGHT = "light"
 const val THEME_DARK = "dark"
 
+/** 跳转方式：immediate 立刻跳转 / copy_first 复制关键词后跳转。 */
 const val JUMP_IMMEDIATE = "immediate"
-const val JUMP_COPY_THEN_JUMP = "copy_then_jump"
+const val JUMP_COPY_FIRST = "copy_first"
 
-const val UPDATE_CHECK_NEVER = "never"
-const val UPDATE_CHECK_MANUAL = "manual"
-const val UPDATE_CHECK_DAILY = "daily"
-const val UPDATE_CHECK_WEEKLY = "weekly"
+/** 更新检查频率：manual / daily / weekly / monthly。 */
+const val UPDATE_FREQ_MANUAL = "manual"
+const val UPDATE_FREQ_DAILY = "daily"
+const val UPDATE_FREQ_WEEKLY = "weekly"
+const val UPDATE_FREQ_MONTHLY = "monthly"
 
-/** 默认启用平台（首次安装时的初始值，可被“恢复默认”重置）。 */
-val DEFAULT_ENABLED_PLATFORMS = listOf(
-    "douyin", "xiaohongshu", "bilibili", "zhihu", "weibo", "taobao",
-    "baidu", "quark", "weixin", "kuaishou", "douban", "bing",
-)
+/** 更新渠道：stable / beta / all。 */
+const val UPDATE_CHANNEL_STABLE = "stable"
+const val UPDATE_CHANNEL_BETA = "beta"
+const val UPDATE_CHANNEL_ALL = "all"
+
+/** 更新提醒方式：notification / dialog / none。 */
+const val UPDATE_REMINDER_NOTIFICATION = "notification"
+const val UPDATE_REMINDER_DIALOG = "dialog"
+const val UPDATE_REMINDER_NONE = "none"
+
+/** 小组件排列方式：order 平台顺序（默认）/ freq 使用频次 / name 名称（拼音/首字母）。 */
+const val WIDGET_SORT_ORDER = "order"
+const val WIDGET_SORT_FREQ = "freq"
+const val WIDGET_SORT_NAME = "name"
+
+/** 小组件数据来源：enabled 已启用平台（默认）/ frequent 常用平台 / all 全部平台。 */
+const val WIDGET_SOURCE_ENABLED = "enabled"
+const val WIDGET_SOURCE_FREQUENT = "frequent"
+const val WIDGET_SOURCE_ALL = "all"
+
+/** 小组件点击空白/搜索栏行为：default 打开默认平台并弹键盘（默认）/ home 打开 App 首页。 */
+const val WIDGET_CLICK_DEFAULT = "default"
+const val WIDGET_CLICK_HOME = "home"
 
 /**
- * 全部偏好读写入口（SharedPreferences 封装 + 响应式 StateFlow）。
- * 所有值均为带默认值的一次性读取，写入后同步更新 StateFlow，供 Compose 观察。
+ * 本地偏好：默认/上次平台、启用平台顺序、自定义平台、最近搜索、
+ * 唤起偏好、主题外观、跳转方式、触感反馈、协议同意状态，以及备份恢复。
  */
-class AppPrefs(context: Context) {
-    private val sp: SharedPreferences =
-        context.getSharedPreferences("kuaishou_prefs", Context.MODE_PRIVATE)
+class AppPrefs(private val context: Context) {
 
-    // ---- 基础偏好（StateFlow 缓存，写后即发） ----
+    companion object {
+        /** 最近搜索关键词保留条数（首页「最近搜索」直接全量渲染，不宜过多）。 */
+        private const val HISTORY_MAX = 10
+    }
 
-    private val _defaultPlatformId = MutableStateFlow(
-        sp.getString(KEY_DEFAULT_PLATFORM, DEFAULT_ENABLED_PLATFORMS.first())
-            ?: DEFAULT_ENABLED_PLATFORMS.first()
+    /** 个人使用统计快照。 */
+    data class SearchStats(
+        val total: Int = 0,
+        val covered: Set<String> = emptySet(),
+        /**
+         * 各平台的累计搜索次数（与 total 同口径，均为「实际跳转的搜索」）。
+         * 各项之和恒等于 total，用于首页「使用平台」排行。
+         */
+        val platformCounts: Map<String, Int> = emptyMap(),
     )
-    val defaultPlatformId: StateFlow<String> = _defaultPlatformId.asStateFlow()
 
-    private val _enabledPlatformIds = MutableStateFlow(
-        sp.getStringSet(KEY_ENABLED_PLATFORMS, null)
-            ?.toList()
-            ?.takeIf { it.isNotEmpty() }
-            ?: DEFAULT_ENABLED_PLATFORMS
+    /** 更新记录（用于「更新历史」展示）。 */
+    data class UpdateRecord(
+        val version: String = "",
+        val time: Long = 0L,
+        val channel: String = UPDATE_CHANNEL_STABLE,
+        val status: String = "",
     )
-    val enabledPlatformIds: StateFlow<List<String>> = _enabledPlatformIds.asStateFlow()
 
-    private val _customPlatforms = MutableStateFlow(
-        sp.getString(KEY_CUSTOM_PLATFORMS, null)?.let { parseCustomPlatforms(it) } ?: emptyList()
-    )
-    val customPlatforms: StateFlow<List<CustomPlatform>> = _customPlatforms.asStateFlow()
+    private val keyDefaultPlatform = stringPreferencesKey("default_platform")
+    private val keyLastPlatform = stringPreferencesKey("last_platform")
+    private val keyEnabledOrder = stringPreferencesKey("enabled_order")
+    private val keyHistory = stringPreferencesKey("history")
+    private val keyPreferLaunchApp = booleanPreferencesKey("prefer_launch_app")
+    private val keyAgreementAccepted = booleanPreferencesKey("agreement_accepted")
+    private val keyThemeMode = stringPreferencesKey("theme_mode")
+    private val keyJumpMode = stringPreferencesKey("jump_mode")
+    private val keyHapticsEnabled = booleanPreferencesKey("haptics_enabled")
+    private val keyCustomPlatforms = stringPreferencesKey("custom_platforms")
+    private val keyPlatformClicks = stringPreferencesKey("platform_clicks")
+    private val keySearchStats = stringPreferencesKey("search_stats")
+    private val keyFrequencySort = booleanPreferencesKey("frequency_sort")
+    private val keyShowStats = booleanPreferencesKey("show_stats")
+    private val keyUpdateCheckFreq = stringPreferencesKey("update_check_freq")
+    private val keyAutoDownload = booleanPreferencesKey("auto_download")
+    private val keyWifiOnly = booleanPreferencesKey("wifi_only")
+    private val keyAutoInstall = booleanPreferencesKey("auto_install")
+    private val keyUpdateChannel = stringPreferencesKey("update_channel")
+    private val keyUpdateReminder = stringPreferencesKey("update_reminder")
+    private val keyLastUpdateCheck = longPreferencesKey("last_update_check")
+    private val keyUpdateHistory = stringPreferencesKey("update_history")
 
-    private val _history = MutableStateFlow(
-        sp.getString(KEY_HISTORY, null)?.split('\u0001')?.filter { it.isNotBlank() } ?: emptyList()
-    )
-    val history: StateFlow<List<String>> = _history.asStateFlow()
+    /** 小组件配置。 */
+    private val keyWidgetSort = stringPreferencesKey("widget_sort")
+    private val keyWidgetSource = stringPreferencesKey("widget_source")
+    private val keyWidgetShowRecent = booleanPreferencesKey("widget_show_recent")
+    private val keyWidgetClickAction = stringPreferencesKey("widget_click_action")
+    private val keyWidgetAutoFocus = booleanPreferencesKey("widget_auto_focus")
 
-    private val _platformClicks = MutableStateFlow(
-        sp.getString(KEY_PLATFORM_CLICKS, null)
-            ?.split('\u0001')
-            ?.mapNotNull { line -> line.split(':', limit = 2).let { if (it.size == 2) it[0] to it[1].toIntOrNull() ?: 0 else null } }
-            ?.toMap()
-            ?: emptyMap()
-    )
-    val platformClicks: StateFlow<Map<String, Int>> = _platformClicks.asStateFlow()
+    /** 各尺寸小组件「指定展示平台」id 列表（逗号分隔、有序；空字符串表示回退到排列/来源自动选取）。 */
+    private val keyWidgetSearchPlatforms = stringPreferencesKey("widget_search_platforms")
+    private val keyWidget2x2Platforms = stringPreferencesKey("widget_2x2_platforms")
+    private val keyWidget4x2Platforms = stringPreferencesKey("widget_4x2_platforms")
 
-    private val _themeMode = MutableStateFlow(
-        sp.getString(KEY_THEME_MODE, THEME_SYSTEM) ?: THEME_SYSTEM
-    )
-    val themeMode: StateFlow<String> = _themeMode.asStateFlow()
+    /** 逗号分隔 id 字符串 → 列表（过滤空白）；空字符串/缺失返回空列表。 */
+    private fun parseIdList(raw: String?): List<String> =
+        raw?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
 
-    private val _jumpMode = MutableStateFlow(
-        sp.getString(KEY_JUMP_MODE, JUMP_IMMEDIATE) ?: JUMP_IMMEDIATE
-    )
-    val jumpMode: StateFlow<String> = _jumpMode.asStateFlow()
+    val defaultPlatformId: Flow<String?> =
+        context.dataStore.data.map { it[keyDefaultPlatform] }
 
-    private val _hapticsEnabled = MutableStateFlow(sp.getBoolean(KEY_HAptics_ENABLED, true))
-    val hapticsEnabled: StateFlow<Boolean> = _hapticsEnabled.asStateFlow()
+    val lastPlatformId: Flow<String?> =
+        context.dataStore.data.map { it[keyLastPlatform] }
 
-    private val _autoOpenApp = MutableStateFlow(sp.getBoolean(KEY_AUTO_OPEN_APP, true))
-    val autoOpenApp: StateFlow<Boolean> = _autoOpenApp.asStateFlow()
+    /** 已启用平台 id 列表（顺序即主页宫格顺序）；首次读取时为空 → UI 层回退到默认启用列表。 */
+    val enabledPlatformIds: Flow<List<String>> =
+        context.dataStore.data.map { prefs ->
+            prefs[keyEnabledOrder]?.split(",")?.filter { it.isNotBlank() } ?: emptyList()
+        }
 
-    private val _agreementAccepted = MutableStateFlow(sp.getBoolean(KEY_AGREEMENT_ACCEPTED, false))
-    val agreementAccepted: StateFlow<Boolean> = _agreementAccepted.asStateFlow()
+    /** 最近搜索关键词，最多 10 条，最近的在最前。 */
+    val history: Flow<List<String>> =
+        context.dataStore.data.map { prefs ->
+            prefs[keyHistory]?.split("\u0001")?.filter { it.isNotBlank() } ?: emptyList()
+        }
 
-    private val _updateCheckInterval = MutableStateFlow(
-        sp.getString(KEY_UPDATE_CHECK_INTERVAL, UPDATE_CHECK_WEEKLY) ?: UPDATE_CHECK_WEEKLY
-    )
-    val updateCheckInterval: StateFlow<String> = _updateCheckInterval.asStateFlow()
+    val preferLaunchApp: Flow<Boolean> =
+        context.dataStore.data.map { it[keyPreferLaunchApp] ?: true }
 
-    private val _lastUpdateCheck = MutableStateFlow(sp.getLong(KEY_LAST_UPDATE_CHECK, 0L))
-    val lastUpdateCheck: StateFlow<Long> = _lastUpdateCheck.asStateFlow()
+    /** 用户是否已同意用户协议与隐私说明（首次启动弹窗；可在关于页撤回）。 */
+    val agreementAccepted: Flow<Boolean> =
+        context.dataStore.data.map { it[keyAgreementAccepted] ?: false }
 
-    private val _showWidgetKeyboard = MutableStateFlow(sp.getBoolean(KEY_SHOW_WIDGET_KEYBOARD, true))
-    val showWidgetKeyboard: StateFlow<Boolean> = _showWidgetKeyboard.asStateFlow()
+    /** 主题外观：THEME_SYSTEM / THEME_LIGHT / THEME_DARK。 */
+    val themeMode: Flow<String> =
+        context.dataStore.data.map { it[keyThemeMode] ?: THEME_SYSTEM }
 
-    private val _widgetPlatforms4x1 = MutableStateFlow(
-        sp.getStringSet(KEY_WIDGET_PLATFORMS_4X1, null)?.toList() ?: emptyList()
-    )
-    val widgetPlatforms4x1: StateFlow<List<String>> = _widgetPlatforms4x1.asStateFlow()
+    /** 跳转方式：JUMP_IMMEDIATE / JUMP_COPY_FIRST。 */
+    val jumpMode: Flow<String> =
+        context.dataStore.data.map { it[keyJumpMode] ?: JUMP_IMMEDIATE }
 
-    private val _widgetPlatforms2x2 = MutableStateFlow(
-        sp.getStringSet(KEY_WIDGET_PLATFORMS_2X2, null)?.toList() ?: emptyList()
-    )
-    val widgetPlatforms2x2: StateFlow<List<String>> = _widgetPlatforms2x2.asStateFlow()
+    /** 触感反馈开关（跳转/复制/清空时轻微震动）。 */
+    val hapticsEnabled: Flow<Boolean> =
+        context.dataStore.data.map { it[keyHapticsEnabled] ?: true }
 
-    private val _widgetPlatforms4x2 = MutableStateFlow(
-        sp.getStringSet(KEY_WIDGET_PLATFORMS_4X2, null)?.toList() ?: emptyList()
-    )
-    val widgetPlatforms4x2: StateFlow<List<String>> = _widgetPlatforms4x2.asStateFlow()
-
-    // ---- 写方法（写 SharedPreferences + 更新 StateFlow） ----
-
-    fun setDefaultPlatform(id: String) {
-        sp.edit().putString(KEY_DEFAULT_PLATFORM, id).apply()
-        _defaultPlatformId.value = id
-    }
-
-    fun setEnabledPlatforms(ids: List<String>) {
-        sp.edit().putStringSet(KEY_ENABLED_PLATFORMS, ids.toSet()).apply()
-        _enabledPlatformIds.value = ids
-    }
-
-    fun setCustomPlatforms(list: List<CustomPlatform>) {
-        sp.edit().putString(KEY_CUSTOM_PLATFORMS, list.joinToString("\u0002") { it.toLine() }).apply()
-        _customPlatforms.value = list
-    }
-
-    fun addHistory(keyword: String) {
-        val trimmed = keyword.trim()
-        if (trimmed.isBlank()) return
-        val updated = (listOf(trimmed) + _history.value.filter { it != trimmed }).take(10)
-        sp.edit().putString(KEY_HISTORY, updated.joinToString("\u0001")).apply()
-        _history.value = updated
-    }
-
-    fun clearHistory() {
-        sp.edit().remove(KEY_HISTORY).apply()
-        _history.value = emptyList()
-    }
-
-    fun recordPlatformClick(platformId: String) {
-        val updated = _platformClicks.value.toMutableMap()
-        updated[platformId] = (updated[platformId] ?: 0) + 1
-        sp.edit().putString(
-            KEY_PLATFORM_CLICKS,
-            updated.entries.joinToString("\u0001") { "${it.key}:${it.value}" },
-        ).apply()
-        _platformClicks.value = updated
-    }
-
-    fun setThemeMode(mode: String) {
-        sp.edit().putString(KEY_THEME_MODE, mode).apply()
-        _themeMode.value = mode
-    }
-
-    fun setJumpMode(mode: String) {
-        sp.edit().putString(KEY_JUMP_MODE, mode).apply()
-        _jumpMode.value = mode
-    }
-
-    fun setHapticsEnabled(enabled: Boolean) {
-        sp.edit().putBoolean(KEY_HAptics_ENABLED, enabled).apply()
-        _hapticsEnabled.value = enabled
-    }
-
-    fun setAutoOpenApp(enabled: Boolean) {
-        sp.edit().putBoolean(KEY_AUTO_OPEN_APP, enabled).apply()
-        _autoOpenApp.value = enabled
-    }
-
-    fun setAgreementAccepted(accepted: Boolean) {
-        sp.edit().putBoolean(KEY_AGREEMENT_ACCEPTED, accepted).apply()
-        _agreementAccepted.value = accepted
-    }
-
-    fun setUpdateCheckInterval(interval: String) {
-        sp.edit().putString(KEY_UPDATE_CHECK_INTERVAL, interval).apply()
-        _updateCheckInterval.value = interval
-    }
-
-    fun setLastUpdateCheck(timestamp: Long) {
-        sp.edit().putLong(KEY_LAST_UPDATE_CHECK, timestamp).apply()
-        _lastUpdateCheck.value = timestamp
-    }
-
-    fun setShowWidgetKeyboard(enabled: Boolean) {
-        sp.edit().putBoolean(KEY_SHOW_WIDGET_KEYBOARD, enabled).apply()
-        _showWidgetKeyboard.value = enabled
-    }
-
-    fun setWidgetPlatforms(sizeKey: String, ids: List<String>) {
-        when (sizeKey) {
-            KEY_WIDGET_PLATFORMS_4X1 -> {
-                sp.edit().putStringSet(KEY_WIDGET_PLATFORMS_4X1, ids.toSet()).apply()
-                _widgetPlatforms4x1.value = ids
+    /** 用户自定义平台列表。 */
+    val customPlatforms: Flow<List<CustomPlatformData>> =
+        context.dataStore.data.map { prefs ->
+            val raw = prefs[keyCustomPlatforms] ?: return@map emptyList()
+            try {
+                val arr = JSONArray(raw)
+                (0 until arr.length()).map { i ->
+                    val obj = arr.getJSONObject(i)
+                    CustomPlatformData(
+                        id = obj.optString("id"),
+                        name = obj.optString("name"),
+                        schemeTemplate = if (obj.has("scheme")) obj.optString("scheme").takeIf { it.isNotBlank() } else null,
+                        webTemplate = obj.optString("web"),
+                    )
+                }.filter { it.id.isNotBlank() && it.name.isNotBlank() && it.webTemplate.isNotBlank() }
+            } catch (e: Exception) {
+                emptyList()
             }
-            KEY_WIDGET_PLATFORMS_2X2 -> {
-                sp.edit().putStringSet(KEY_WIDGET_PLATFORMS_2X2, ids.toSet()).apply()
-                _widgetPlatforms2x2.value = ids
-            }
-            KEY_WIDGET_PLATFORMS_4X2 -> {
-                sp.edit().putStringSet(KEY_WIDGET_PLATFORMS_4X2, ids.toSet()).apply()
-                _widgetPlatforms4x2.value = ids
-            }
+        }
+
+    suspend fun setAgreementAccepted(accepted: Boolean) {
+        context.dataStore.edit { it[keyAgreementAccepted] = accepted }
+    }
+
+    suspend fun setDefaultPlatform(id: String) {
+        context.dataStore.edit { it[keyDefaultPlatform] = id }
+    }
+
+    suspend fun setLastPlatform(id: String) {
+        context.dataStore.edit { it[keyLastPlatform] = id }
+    }
+
+    suspend fun setEnabledOrder(ids: List<String>) {
+        context.dataStore.edit { it[keyEnabledOrder] = ids.joinToString(",") }
+    }
+
+    /** 各平台点击次数（JSON: {"id":count}），用于「按频次自动排序」。 */
+    val platformClicks: Flow<Map<String, Int>> =
+        context.dataStore.data.map { prefs ->
+            prefs[keyPlatformClicks]?.let { parseJsonMap(it) } ?: emptyMap()
+        }
+
+    /** 个人使用统计：总次数、按月桶、已覆盖平台集合。 */
+    val searchStats: Flow<SearchStats> =
+        context.dataStore.data.map { prefs ->
+            prefs[keySearchStats]?.let { parseSearchStats(it) } ?: SearchStats()
+        }
+
+    /** 「按使用频次自动排序平台」开关，默认关闭（保留用户手动顺序）。 */
+    val frequencySortEnabled: Flow<Boolean> =
+        context.dataStore.data.map { it[keyFrequencySort] ?: false }
+
+    /** 「首页显示使用统计」开关，默认开启。 */
+    val showStats: Flow<Boolean> =
+        context.dataStore.data.map { it[keyShowStats] ?: true }
+
+    /** 更新检查频率：manual / daily / weekly / monthly，默认每周。 */
+    val updateCheckFreq: Flow<String> =
+        context.dataStore.data.map { it[keyUpdateCheckFreq] ?: UPDATE_FREQ_WEEKLY }
+
+    /** 自动下载更新开关，默认关闭（避免消耗流量）。 */
+    val autoDownload: Flow<Boolean> =
+        context.dataStore.data.map { it[keyAutoDownload] ?: false }
+
+    /** 仅 Wi-Fi 下自动下载，默认开启。 */
+    val wifiOnlyDownload: Flow<Boolean> =
+        context.dataStore.data.map { it[keyWifiOnly] ?: true }
+
+    /** 下载后自动安装开关，默认关闭。 */
+    val autoInstall: Flow<Boolean> =
+        context.dataStore.data.map { it[keyAutoInstall] ?: false }
+
+    /** 更新渠道：stable / beta / all，默认稳定版。 */
+    val updateChannel: Flow<String> =
+        context.dataStore.data.map { it[keyUpdateChannel] ?: UPDATE_CHANNEL_STABLE }
+
+    /** 更新提醒方式：notification / dialog / none，默认通知栏。 */
+    val updateReminder: Flow<String> =
+        context.dataStore.data.map { it[keyUpdateReminder] ?: UPDATE_REMINDER_NOTIFICATION }
+
+    /** 上次手动检查更新的时间戳（毫秒），0 表示从未检查。 */
+    val lastUpdateCheck: Flow<Long> =
+        context.dataStore.data.map { it[keyLastUpdateCheck] ?: 0L }
+
+    /** 更新历史记录（最新在前）。 */
+    val updateHistory: Flow<List<UpdateRecord>> =
+        context.dataStore.data.map { prefs -> parseUpdateHistory(prefs[keyUpdateHistory]) }
+
+    // ---- 小组件配置（供桌面小组件与「小组件设置」读取）----
+
+    /** 排列方式：order / freq / name，默认 order。 */
+    val widgetSort: Flow<String> =
+        context.dataStore.data.map { it[keyWidgetSort] ?: WIDGET_SORT_ORDER }
+
+    /** 数据来源：enabled / frequent / all，默认 enabled。 */
+    val widgetSource: Flow<String> =
+        context.dataStore.data.map { it[keyWidgetSource] ?: WIDGET_SOURCE_ENABLED }
+
+    /** 是否显示最近搜索（仅 4x4 面板生效），默认开启。 */
+    val widgetShowRecent: Flow<Boolean> =
+        context.dataStore.data.map { it[keyWidgetShowRecent] ?: true }
+
+    /** 点击空白/搜索栏行为：default / home，默认 default。 */
+    val widgetClickAction: Flow<String> =
+        context.dataStore.data.map { it[keyWidgetClickAction] ?: WIDGET_CLICK_DEFAULT }
+
+    /** 点击小组件是否自动弹出键盘，默认开启。 */
+    val widgetAutoFocus: Flow<Boolean> =
+        context.dataStore.data.map { it[keyWidgetAutoFocus] ?: true }
+
+    /** 4×1 搜索栏指定展示的平台 id（有序；空表示回退到「排列/来源」自动选取）。 */
+    val widgetSearchPlatforms: Flow<List<String>> =
+        context.dataStore.data.map { parseIdList(it[keyWidgetSearchPlatforms]) }
+
+    /** 2×2 宫格指定展示的平台 id（有序；空表示回退）。 */
+    val widget2x2Platforms: Flow<List<String>> =
+        context.dataStore.data.map { parseIdList(it[keyWidget2x2Platforms]) }
+
+    /** 4×2 宫格指定展示的平台 id（有序；空表示回退）。 */
+    val widget4x2Platforms: Flow<List<String>> =
+        context.dataStore.data.map { parseIdList(it[keyWidget4x2Platforms]) }
+
+    /** 平台被点击一次 → 计数 +1（仅在实际选中不同平台时调用）。 */
+    suspend fun incrementPlatformClick(id: String) {
+        context.dataStore.edit { prefs ->
+            val obj = runCatching { JSONObject(prefs[keyPlatformClicks] ?: "{}") }.getOrDefault(JSONObject())
+            obj.put(id, obj.optInt(id) + 1)
+            prefs[keyPlatformClicks] = obj.toString()
         }
     }
 
-    // ---- 备份 / 恢复 ----
+    /** 一次成功搜索 → 总次数 +1、该平台计数 +1、覆盖平台集合追加（去重）。 */
+    suspend fun recordSearch(platformId: String) {
+        context.dataStore.edit { prefs ->
+            val obj = runCatching { JSONObject(prefs[keySearchStats] ?: "{}") }.getOrDefault(JSONObject())
+            obj.put("total", obj.optInt("total") + 1)
+            // 按平台累计搜索次数：与 total 同口径，保证各平台之和 == total
+            val counts = obj.optJSONObject("platformCounts")
+                ?: JSONObject().also { obj.put("platformCounts", it) }
+            counts.put(platformId, counts.optInt(platformId) + 1)
+            val covered = obj.optJSONArray("covered") ?: org.json.JSONArray().also { obj.put("covered", it) }
+            var exists = false
+            for (i in 0 until covered.length()) {
+                if (covered.getString(i) == platformId) { exists = true; break }
+            }
+            if (!exists) covered.put(platformId)
+            prefs[keySearchStats] = obj.toString()
+        }
+    }
 
-    /** 导出全部设置（不含协议同意状态），供备份。 */
-    fun exportJson(): String = buildString {
-        append("{")
-        append("\"defaultPlatform\":\"${_defaultPlatformId.value}\",")
-        append("\"enabledPlatforms\":[")
-        append(_enabledPlatformIds.value.joinToString(",") { "\"$it\"" })
-        append("],")
-        append("\"customPlatforms\":[")
-        append(_customPlatforms.value.joinToString(",") { it.toJson() })
-        append("],")
-        append("\"history\":[")
-        append(_history.value.joinToString(",") { "\"${it.replace("\"", "\\\"")}\"" })
-        append("],")
-        append("\"platformClicks\":{")
-        append(
-            _platformClicks.value.entries.joinToString(",") { "\"${it.key}\":${it.value}" }
+    suspend fun setFrequencySort(enabled: Boolean) {
+        context.dataStore.edit { it[keyFrequencySort] = enabled }
+    }
+
+    suspend fun setShowStats(show: Boolean) {
+        context.dataStore.edit { it[keyShowStats] = show }
+    }
+
+    /** 设置更新检查频率。 */
+    suspend fun setUpdateCheckFreq(freq: String) {
+        context.dataStore.edit { it[keyUpdateCheckFreq] = freq }
+    }
+
+    /** 设置自动下载更新开关。 */
+    suspend fun setAutoDownload(enabled: Boolean) {
+        context.dataStore.edit { it[keyAutoDownload] = enabled }
+    }
+
+    /** 设置仅 Wi-Fi 下下载开关。 */
+    suspend fun setWifiOnlyDownload(enabled: Boolean) {
+        context.dataStore.edit { it[keyWifiOnly] = enabled }
+    }
+
+    /** 设置下载后自动安装开关。 */
+    suspend fun setAutoInstall(enabled: Boolean) {
+        context.dataStore.edit { it[keyAutoInstall] = enabled }
+    }
+
+    /** 设置更新渠道。 */
+    suspend fun setUpdateChannel(channel: String) {
+        context.dataStore.edit { it[keyUpdateChannel] = channel }
+    }
+
+    /** 设置更新提醒方式。 */
+    suspend fun setUpdateReminder(reminder: String) {
+        context.dataStore.edit { it[keyUpdateReminder] = reminder }
+    }
+
+    // ---- 小组件配置 setter ----
+
+    suspend fun setWidgetSort(sort: String) {
+        context.dataStore.edit { it[keyWidgetSort] = sort }
+    }
+
+    suspend fun setWidgetSource(source: String) {
+        context.dataStore.edit { it[keyWidgetSource] = source }
+    }
+
+    suspend fun setWidgetShowRecent(show: Boolean) {
+        context.dataStore.edit { it[keyWidgetShowRecent] = show }
+    }
+
+    suspend fun setWidgetClickAction(action: String) {
+        context.dataStore.edit { it[keyWidgetClickAction] = action }
+    }
+
+    suspend fun setWidgetAutoFocus(focus: Boolean) {
+        context.dataStore.edit { it[keyWidgetAutoFocus] = focus }
+    }
+
+    /** 保存 4×1 搜索栏指定展示的平台 id（有序）。 */
+    suspend fun setWidgetSearchPlatforms(ids: List<String>) {
+        context.dataStore.edit { it[keyWidgetSearchPlatforms] = ids.joinToString(",") }
+    }
+
+    /** 保存 2×2 宫格指定展示的平台 id（有序）。 */
+    suspend fun setWidget2x2Platforms(ids: List<String>) {
+        context.dataStore.edit { it[keyWidget2x2Platforms] = ids.joinToString(",") }
+    }
+
+    /** 保存 4×2 宫格指定展示的平台 id（有序）。 */
+    suspend fun setWidget4x2Platforms(ids: List<String>) {
+        context.dataStore.edit { it[keyWidget4x2Platforms] = ids.joinToString(",") }
+    }
+
+    /** 记录本次手动检查更新的时间。 */
+    suspend fun setLastUpdateCheck(ts: Long) {
+        context.dataStore.edit { it[keyLastUpdateCheck] = ts }
+    }
+
+    /** 追加一条更新历史（最多保留 20 条，最新在前）。 */
+    suspend fun addUpdateHistory(record: UpdateRecord) {
+        context.dataStore.edit { prefs ->
+            val list = parseUpdateHistory(prefs[keyUpdateHistory]).toMutableList()
+            list.add(0, record)
+            prefs[keyUpdateHistory] = serializeUpdateHistory(list.take(20))
+        }
+    }
+
+    /** 清空更新历史。 */
+    suspend fun clearUpdateHistory() {
+        context.dataStore.edit { it.remove(keyUpdateHistory) }
+    }
+
+    /** 将用户偏好类设置恢复为默认值（不影响搜索历史、平台自定义与使用统计）。 */
+    suspend fun resetAllSettings() {
+        context.dataStore.edit { prefs ->
+            prefs[keyThemeMode] = THEME_SYSTEM
+            prefs[keyJumpMode] = JUMP_IMMEDIATE
+            prefs[keyPreferLaunchApp] = true
+            prefs[keyFrequencySort] = false
+            prefs[keyShowStats] = true
+            prefs[keyHapticsEnabled] = true
+            prefs[keyUpdateCheckFreq] = UPDATE_FREQ_WEEKLY
+            prefs[keyAutoDownload] = false
+            prefs[keyWifiOnly] = true
+            prefs[keyAutoInstall] = false
+            prefs[keyUpdateChannel] = UPDATE_CHANNEL_STABLE
+            prefs[keyUpdateReminder] = UPDATE_REMINDER_NOTIFICATION
+            prefs[keyLastUpdateCheck] = 0L
+            prefs.remove(keyUpdateHistory)
+            // 小组件配置恢复默认
+            prefs[keyWidgetSort] = WIDGET_SORT_ORDER
+            prefs[keyWidgetSource] = WIDGET_SOURCE_ENABLED
+            prefs[keyWidgetShowRecent] = true
+            prefs[keyWidgetClickAction] = WIDGET_CLICK_DEFAULT
+            prefs[keyWidgetAutoFocus] = true
+            prefs.remove(keyWidgetSearchPlatforms)
+            prefs.remove(keyWidget2x2Platforms)
+            prefs.remove(keyWidget4x2Platforms)
+        }
+    }
+
+    private fun parseJsonMap(raw: String): Map<String, Int> = runCatching {
+        val obj = JSONObject(raw)
+        buildMap<String, Int> {
+            val it = obj.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                put(k, obj.getInt(k))
+            }
+        }
+    }.getOrDefault(emptyMap())
+
+    private fun parseSearchStats(raw: String): SearchStats = runCatching {
+        val obj = JSONObject(raw)
+        val covered = (obj.optJSONArray("covered")?.let { arr ->
+            (0 until arr.length()).map { arr.getString(it) }
+        } ?: emptyList()).toSet()
+        val countsObj = obj.optJSONObject("platformCounts") ?: JSONObject()
+        val platformCounts = buildMap<String, Int> {
+            val it = countsObj.keys()
+            while (it.hasNext()) {
+                val k = it.next()
+                put(k, countsObj.getInt(k))
+            }
+        }
+        SearchStats(
+            total = obj.optInt("total"),
+            covered = covered,
+            platformCounts = platformCounts,
         )
-        append("},")
-        append("\"themeMode\":\"${_themeMode.value}\",")
-        append("\"jumpMode\":\"${_jumpMode.value}\",")
-        append("\"hapticsEnabled\":${_hapticsEnabled.value},")
-        append("\"autoOpenApp\":${_autoOpenApp.value}")
-        append("}")
+    }.getOrDefault(SearchStats())
+
+    private fun parseUpdateHistory(raw: String?): List<UpdateRecord> {
+        if (raw.isNullOrBlank()) return emptyList()
+        return runCatching {
+            val arr = JSONArray(raw)
+            (0 until arr.length()).mapNotNull { i ->
+                val o = arr.optJSONObject(i) ?: return@mapNotNull null
+                UpdateRecord(
+                    version = o.optString("version"),
+                    time = o.optLong("time"),
+                    channel = o.optString("channel", UPDATE_CHANNEL_STABLE),
+                    status = o.optString("status"),
+                ).takeIf { it.version.isNotBlank() }
+            }
+        }.getOrDefault(emptyList())
     }
 
-    /** 从备份 JSON 恢复设置（协议同意状态不恢复）。 */
-    fun importJson(json: String): Boolean = try {
-        val obj = org.json.JSONObject(json)
-        obj.optString("defaultPlatform").takeIf { it.isNotBlank() }?.let { setDefaultPlatform(it) }
-        obj.optJSONArray("enabledPlatforms")?.let { arr ->
-            setEnabledPlatforms((0 until arr.length()).map { arr.getString(it) })
+    private fun serializeUpdateHistory(list: List<UpdateRecord>): String {
+        val arr = JSONArray()
+        list.forEach { r ->
+            arr.put(
+                JSONObject()
+                    .put("version", r.version)
+                    .put("time", r.time)
+                    .put("channel", r.channel)
+                    .put("status", r.status),
+            )
         }
-        obj.optJSONArray("customPlatforms")?.let { arr ->
-            val list = (0 until arr.length()).map { i ->
-                val item = arr.getJSONObject(i)
-                CustomPlatform(
-                    id = item.optString("id"),
-                    name = item.optString("name"),
-                    scheme = item.optString("scheme"),
-                    webUrl = item.optString("webUrl"),
-                    iconText = item.optString("iconText"),
+        return arr.toString()
+    }
+
+    suspend fun setThemeMode(mode: String) {
+        context.dataStore.edit { it[keyThemeMode] = mode }
+    }
+
+    suspend fun setJumpMode(mode: String) {
+        context.dataStore.edit { it[keyJumpMode] = mode }
+    }
+
+    suspend fun setHapticsEnabled(enabled: Boolean) {
+        context.dataStore.edit { it[keyHapticsEnabled] = enabled }
+    }
+
+    suspend fun setCustomPlatforms(list: List<CustomPlatformData>) {
+        context.dataStore.edit { prefs ->
+            if (list.isEmpty()) {
+                prefs.remove(keyCustomPlatforms)
+            } else {
+                val arr = JSONArray()
+                list.forEach { p ->
+                    arr.put(
+                        JSONObject()
+                            .put("id", p.id)
+                            .put("name", p.name)
+                            .put("scheme", p.schemeTemplate ?: "")
+                            .put("web", p.webTemplate)
+                    )
+                }
+                prefs[keyCustomPlatforms] = arr.toString()
+            }
+        }
+    }
+
+    suspend fun addHistory(keyword: String) {
+        context.dataStore.edit { prefs ->
+            val current = (prefs[keyHistory] ?: "").split("\u0001").filter { it.isNotBlank() }.toMutableList()
+            current.remove(keyword)
+            current.add(0, keyword)
+            prefs[keyHistory] = current.take(HISTORY_MAX).joinToString("\u0001")
+        }
+    }
+
+    suspend fun removeHistory(keyword: String) {
+        context.dataStore.edit { prefs ->
+            val current = (prefs[keyHistory] ?: "").split("\u0001").filter { it.isNotBlank() }.toMutableList()
+            current.remove(keyword)
+            prefs[keyHistory] = current.joinToString("\u0001")
+        }
+    }
+
+    suspend fun clearHistory() {
+        context.dataStore.edit { it.remove(keyHistory) }
+    }
+
+    // ---------------- 备份与恢复 ----------------
+
+    /** 导出全部本地配置为 JSON（用于换机迁移/恢复）。 */
+    suspend fun buildBackupJson(): String {
+        val data = context.dataStore.data.first()
+        val custom = JSONArray()
+        try {
+            val raw = data[keyCustomPlatforms] ?: ""
+            if (raw.isNotBlank()) {
+                val arr = JSONArray(raw)
+                for (i in 0 until arr.length()) custom.put(arr.getJSONObject(i))
+            }
+        } catch (_: Exception) {
+        }
+        return JSONObject()
+            .put("version", 1)
+            .put("default_platform", data[keyDefaultPlatform] ?: "")
+            .put("last_platform", data[keyLastPlatform] ?: "")
+            .put("enabled_order", data[keyEnabledOrder] ?: "")
+            .put("custom_platforms", custom)
+            .put("history", data[keyHistory] ?: "")
+            .put("prefer_launch_app", data[keyPreferLaunchApp] ?: true)
+            .put("theme_mode", data[keyThemeMode] ?: THEME_SYSTEM)
+            .put("jump_mode", data[keyJumpMode] ?: JUMP_IMMEDIATE)
+            .put("haptics_enabled", data[keyHapticsEnabled] ?: true)
+            .put("update_check_freq", data[keyUpdateCheckFreq] ?: UPDATE_FREQ_WEEKLY)
+            .put("auto_download", data[keyAutoDownload] ?: false)
+            .put("wifi_only", data[keyWifiOnly] ?: true)
+            .put("auto_install", data[keyAutoInstall] ?: false)
+            .put("update_channel", data[keyUpdateChannel] ?: UPDATE_CHANNEL_STABLE)
+            .put("update_reminder", data[keyUpdateReminder] ?: UPDATE_REMINDER_NOTIFICATION)
+            .put("last_update_check", data[keyLastUpdateCheck] ?: 0L)
+            .put("update_history", data[keyUpdateHistory] ?: "")
+            .put("widget_sort", data[keyWidgetSort] ?: WIDGET_SORT_ORDER)
+            .put("widget_source", data[keyWidgetSource] ?: WIDGET_SOURCE_ENABLED)
+            .put("widget_show_recent", data[keyWidgetShowRecent] ?: true)
+            .put("widget_click_action", data[keyWidgetClickAction] ?: WIDGET_CLICK_DEFAULT)
+            .put("widget_auto_focus", data[keyWidgetAutoFocus] ?: true)
+            .put("widget_search_platforms", data[keyWidgetSearchPlatforms] ?: "")
+            .put("widget_2x2_platforms", data[keyWidget2x2Platforms] ?: "")
+            .put("widget_4x2_platforms", data[keyWidget4x2Platforms] ?: "")
+            .toString(2)
+    }
+
+    /** 从备份 JSON 恢复全部配置。成功返回 true；解析失败返回 false 且不写任何数据。 */
+    suspend fun restoreFromJson(json: String): Boolean {
+        val obj = try {
+            JSONObject(json)
+        } catch (e: Exception) {
+            return false
+        }
+        val customArr = obj.optJSONArray("custom_platforms")
+        val customList = mutableListOf<CustomPlatformData>()
+        if (customArr != null) {
+            for (i in 0 until customArr.length()) {
+                val p = customArr.getJSONObject(i)
+                customList.add(
+                    CustomPlatformData(
+                        id = p.optString("id"),
+                        name = p.optString("name"),
+                        schemeTemplate = p.optString("scheme").takeIf { it.isNotBlank() },
+                        webTemplate = p.optString("web"),
+                    )
                 )
             }
-            setCustomPlatforms(list)
         }
-        obj.optJSONArray("history")?.let { arr ->
-            val list = (0 until arr.length()).map { arr.getString(it) }.filter { it.isNotBlank() }
-            sp.edit().putString(KEY_HISTORY, list.joinToString("\u0001")).apply()
-            _history.value = list
+        context.dataStore.edit { prefs ->
+            obj.optString("default_platform").takeIf { it.isNotBlank() }?.let { prefs[keyDefaultPlatform] = it }
+            obj.optString("last_platform").takeIf { it.isNotBlank() }?.let { prefs[keyLastPlatform] = it }
+            obj.optString("enabled_order").takeIf { it.isNotBlank() }?.let { prefs[keyEnabledOrder] = it }
+            obj.optString("history").takeIf { it.isNotBlank() }?.let { prefs[keyHistory] = it }
+            prefs[keyPreferLaunchApp] = obj.optBoolean("prefer_launch_app", true)
+            prefs[keyThemeMode] = obj.optString("theme_mode", THEME_SYSTEM)
+            prefs[keyJumpMode] = obj.optString("jump_mode", JUMP_IMMEDIATE)
+            prefs[keyHapticsEnabled] = obj.optBoolean("haptics_enabled", true)
+            prefs[keyUpdateCheckFreq] = obj.optString("update_check_freq", UPDATE_FREQ_WEEKLY)
+            prefs[keyAutoDownload] = obj.optBoolean("auto_download", false)
+            prefs[keyWifiOnly] = obj.optBoolean("wifi_only", true)
+            prefs[keyAutoInstall] = obj.optBoolean("auto_install", false)
+            prefs[keyUpdateChannel] = obj.optString("update_channel", UPDATE_CHANNEL_STABLE)
+            prefs[keyUpdateReminder] = obj.optString("update_reminder", UPDATE_REMINDER_NOTIFICATION)
+            prefs[keyLastUpdateCheck] = obj.optLong("last_update_check", 0L)
+            obj.optString("update_history").takeIf { it.isNotBlank() }?.let { prefs[keyUpdateHistory] = it }
+            prefs[keyWidgetSort] = obj.optString("widget_sort", WIDGET_SORT_ORDER)
+            prefs[keyWidgetSource] = obj.optString("widget_source", WIDGET_SOURCE_ENABLED)
+            prefs[keyWidgetShowRecent] = obj.optBoolean("widget_show_recent", true)
+            prefs[keyWidgetClickAction] = obj.optString("widget_click_action", WIDGET_CLICK_DEFAULT)
+            prefs[keyWidgetAutoFocus] = obj.optBoolean("widget_auto_focus", true)
+            obj.optString("widget_search_platforms").takeIf { it.isNotBlank() }?.let { prefs[keyWidgetSearchPlatforms] = it }
+            obj.optString("widget_2x2_platforms").takeIf { it.isNotBlank() }?.let { prefs[keyWidget2x2Platforms] = it }
+            obj.optString("widget_4x2_platforms").takeIf { it.isNotBlank() }?.let { prefs[keyWidget4x2Platforms] = it }
+            if (customList.isEmpty()) {
+                prefs.remove(keyCustomPlatforms)
+            } else {
+                val arr = JSONArray()
+                customList.forEach { p ->
+                    arr.put(JSONObject().put("id", p.id).put("name", p.name).put("scheme", p.schemeTemplate ?: "").put("web", p.webTemplate))
+                }
+                prefs[keyCustomPlatforms] = arr.toString()
+            }
         }
-        obj.optJSONObject("platformClicks")?.let { o ->
-            val map = o.keys().asSequence().associateWith { o.optInt(it, 0) }
-            sp.edit().putString(KEY_PLATFORM_CLICKS, map.entries.joinToString("\u0001") { "${it.key}:${it.value}" }).apply()
-            _platformClicks.value = map
-        }
-        obj.optString("themeMode").takeIf { it.isNotBlank() }?.let { setThemeMode(it) }
-        obj.optString("jumpMode").takeIf { it.isNotBlank() }?.let { setJumpMode(it) }
-        if (obj.has("hapticsEnabled")) setHapticsEnabled(obj.optBoolean("hapticsEnabled"))
-        if (obj.has("autoOpenApp")) setAutoOpenApp(obj.optBoolean("autoOpenApp"))
-        true
-    } catch (e: Exception) {
-        false
-    }
-
-    /** 恢复出厂设置（保留协议同意状态，避免再次弹窗）。 */
-    fun resetAll() {
-        sp.edit()
-            .remove(KEY_DEFAULT_PLATFORM)
-            .remove(KEY_ENABLED_PLATFORMS)
-            .remove(KEY_CUSTOM_PLATFORMS)
-            .remove(KEY_HISTORY)
-            .remove(KEY_PLATFORM_CLICKS)
-            .remove(KEY_THEME_MODE)
-            .remove(KEY_JUMP_MODE)
-            .remove(KEY_HAptics_ENABLED)
-            .remove(KEY_AUTO_OPEN_APP)
-            .apply()
-        _defaultPlatformId.value = DEFAULT_ENABLED_PLATFORMS.first()
-        _enabledPlatformIds.value = DEFAULT_ENABLED_PLATFORMS
-        _customPlatforms.value = emptyList()
-        _history.value = emptyList()
-        _platformClicks.value = emptyMap()
-        _themeMode.value = THEME_SYSTEM
-        _jumpMode.value = JUMP_IMMEDIATE
-        _hapticsEnabled.value = true
-        _autoOpenApp.value = true
+        return true
     }
 }
-
-/** 自定义平台（用户添加的小众 App 或网页）。 */
-data class CustomPlatform(
-    val id: String,
-    val name: String,
-    val scheme: String,
-    val webUrl: String,
-    val iconText: String = name.take(1),
-) {
-    /** 持久化到单行字符串（\u0002 分隔字段）。 */
-    fun toLine(): String = listOf(id, name, scheme, webUrl, iconText).joinToString("\u0002")
-
-    /** 备份 JSON 片段。 */
-    fun toJson(): String =
-        "{\"id\":\"$id\",\"name\":\"$name\",\"scheme\":\"$scheme\",\"webUrl\":\"$webUrl\",\"iconText\":\"$iconText\"}"
-}
-
-/** 解析自定义平台存储串（\u0002 分隔每条，字段内 \u0002 分隔）。 */
-fun parseCustomPlatforms(raw: String): List<CustomPlatform> =
-    raw.split("\u0001").filter { it.isNotBlank() }.mapNotNull { line ->
-        val parts = line.split("\u0002", limit = 5)
-        if (parts.size >= 4) {
-            CustomPlatform(
-                id = parts[0],
-                name = parts[1],
-                scheme = parts[2],
-                webUrl = parts[3],
-                iconText = parts.getOrNull(4)?.takeIf { it.isNotBlank() } ?: parts[1].take(1),
-            )
-        } else null
-    }
