@@ -37,7 +37,18 @@ class JumpEngine(private val context: Context) {
                     context.startActivity(preciseIntent)
                     return JumpResult.LaunchedApp
                 } catch (e: ActivityNotFoundException) {
-                    // 包名命中失败，回落到系统解析
+                    // 主包未安装 / 未注册该 scheme：依次尝试兜底包（如抖音极速版）
+                    for (pkg in platform.fallbackPackages) {
+                        try {
+                            context.startActivity(preciseIntent.setPackage(pkg))
+                            return JumpResult.LaunchedApp
+                        } catch (e2: ActivityNotFoundException) {
+                            // 该兜底包也不可用，继续尝试下一个
+                        } catch (e2: SecurityException) {
+                            return JumpResult.Failed(platform, keyword)
+                        }
+                    }
+                    // 全部兜底包失败，回落到系统解析
                 } catch (e: SecurityException) {
                     return JumpResult.Failed(platform, keyword)
                 }

@@ -28,6 +28,8 @@ data class Platform(
     val homeUrl: String,
     val scheme: String? = null,
     val packageName: String? = null,
+    /** 主包未安装时的备选包名（如抖音主 App 缺失时唤起抖音极速版），跳转时按序尝试。 */
+    val fallbackPackages: List<String> = emptyList(),
     val iconRes: Int,
     val defaultEnabled: Boolean = true,
     /** 是否为用户自定义平台（无内置图标，UI 显示首字母块）。 */
@@ -73,6 +75,8 @@ object PlatformRegistry {
             homeUrl = "https://www.douyin.com/",
             scheme = "snssdk1128://search?keyword={keyword}",
             packageName = "com.ss.android.ugc.aweme",
+            // 未装抖音主 App 时，唤起抖音极速版（scheme 协议同族，极速版注册 snssdk1128 即可命中）
+            fallbackPackages = listOf("com.ss.android.ugc.aweme.lite"),
             iconRes = R.drawable.ic_douyin,
             category = PlatformCategory.VIDEO,
         ),

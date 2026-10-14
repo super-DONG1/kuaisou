@@ -1,5 +1,6 @@
 package com.kuaishou.app.ui
 
+import android.Manifest
 import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -7,15 +8,16 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Environment
+import android.provider.Settings
 import android.widget.Toast
 import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.kuaishou.app.data.AppPrefs
 import com.kuaishou.app.data.AppPrefs.UpdateRecord
-import com.kuaishou.app.data.UPDATE_CHANNEL_STABLE
 import com.kuaishou.app.data.UPDATE_FREQ_DAILY
 import com.kuaishou.app.data.UPDATE_FREQ_MANUAL
 import com.kuaishou.app.data.UPDATE_FREQ_MONTHLY
@@ -88,7 +90,7 @@ object GitHubUpdateChecker {
     }
 
     /** 请求 GitHub Releases 列表，按渠道筛选最新版本，并与当前版本比对。 */
-    suspend fun check(channel: String, currentVersion: String): CheckResult {
+    suspend fun check(currentVersion: String): CheckResult {
         return withContext(Dispatchers.IO) {
             try {
                 val conn = (URL(API_LIST).openConnection() as HttpURLConnection).apply {
@@ -105,7 +107,7 @@ object GitHubUpdateChecker {
                 }
                 val text = conn.inputStream.bufferedReader().use { it.readText() }
                 conn.disconnect()
-                val release = pickRelease(JSONArray(text), channel)
+                val release = pickRelease(JSONArray(text))
                     ?: return@withContext CheckResult.Error("该渠道暂无可用发布版本")
                 val tag = release.optString("tag_name", "")
                 val version = tag.removePrefix("v").ifBlank { tag }
@@ -157,7 +159,7 @@ object GitHubUpdateChecker {
         if (System.currentTimeMillis() - last < intervalMs) return
 
         val current = currentVersion(context)
-        when (val result = check(prefs.updateChannel.first(), current)) {
+        when (val result = check(current)) {
             is CheckResult.UpToDate -> prefs.setLastUpdateCheck(System.currentTimeMillis())
             is CheckResult.Found -> {
                 prefs.setLastUpdateCheck(System.currentTimeMillis())
@@ -165,7 +167,6 @@ object GitHubUpdateChecker {
                     UpdateRecord(
                         version = result.info.version,
                         time = if (result.info.publishedAt > 0) result.info.publishedAt else System.currentTimeMillis(),
-                        channel = prefs.updateChannel.first(),
                         status = "自动检查发现新版本",
                     ),
                 )
@@ -183,13 +184,13 @@ object GitHubUpdateChecker {
         }
     }
 
-    private fun pickRelease(arr: JSONArray, channel: String): JSONObject? {
-        val includePre = channel != UPDATE_CHANNEL_STABLE
+    private fun pickRelease(arr: JSONArray): JSONObject? {
+        // 只接收正式版（跳过 Pre-release 与草稿）
         val candidates = mutableListOf<JSONObject>()
         for (i in 0 until arr.length()) {
             val r = arr.optJSONObject(i) ?: continue
             if (r.optBoolean("draft", false)) continue
-            if (r.optBoolean("prerelease", false) && !includePre) continue
+            if (r.optBoolean("prerelease", false)) continue
             candidates.add(r)
         }
         if (candidates.isEmpty()) return null
@@ -212,7 +213,7 @@ object GitHubUpdateChecker {
     }
 
     /** 通过 DownloadManager 下载 APK；完成后回调本地 Uri（失败为 null）。 */
-    fun downloadApk(context: Context, apkUrl: String, wifiOnly: Boolean, onResult: (Uri?) -> Unit) {
+    fun downloadApk(context: Context, apkUrl: String, onResult: (Uri?) -> Unit) {
         val appCtx = context.applicationContext
         val dm = appCtx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
         val req = DownloadManager.Request(Uri.parse(apkUrl)).apply {
@@ -221,7 +222,6 @@ object GitHubUpdateChecker {
             setMimeType("application/vnd.android.package-archive")
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationInExternalFilesDir(appCtx, Environment.DIRECTORY_DOWNLOADS, "kuaisou_update.apk")
-            if (wifiOnly) setAllowedNetworkTypes(DownloadManager.Request.NETWORK_WIFI)
         }
         val id = dm.enqueue(req)
         val receiver = object : BroadcastReceiver() {
@@ -266,6 +266,17 @@ object GitHubUpdateChecker {
         context.startActivity(intent)
     }
 
+    /** 拉起系统「安装未知应用」设置页（Android O+）。 */
+    fun openInstallSettings(context: Context) {
+        val intent = Intent(
+            Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+            Uri.parse("package:${context.packageName}"),
+        ).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+
     /** 在浏览器中打开发布页。 */
     fun openRelease(context: Context, url: String) {
         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
@@ -276,6 +287,12 @@ object GitHubUpdateChecker {
     /** 发送更新通知（提醒方式为通知栏时）。 */
     fun notifyUpdate(context: Context, info: UpdateInfo) {
         val appCtx = context.applicationContext
+        // Android 13+ 需要「通知」运行时权限，未授权时通知不会展示，静默跳过
+        if (Build.VERSION.SDK_INT >= 33 &&
+            ContextCompat.checkSelfPermission(appCtx, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+        ) {
+            return
+        }
         val nm = appCtx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "update_channel"
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
