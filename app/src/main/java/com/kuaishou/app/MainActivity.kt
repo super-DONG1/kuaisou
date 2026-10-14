@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.TextSelectionColors
@@ -114,6 +115,20 @@ private fun pageDepth(page: Page): Int = when (page) {
     Page.Update -> 2
     Page.WidgetSettings -> 2
     Page.Changelog -> 3
+}
+
+/**
+ * 页面过渡方向：深度更深为前进、更浅为后退；深度相同时仅 Settings ↔ Platforms 互转，
+ * 进平台管理算前进、返回设置算后退 —— 否则同深度一律判前进，返回时动画方向会颠倒。
+ */
+private fun isForward(initial: Page, target: Page): Boolean {
+    val d = pageDepth(target) - pageDepth(initial)
+    if (d != 0) return d > 0
+    return when {
+        initial == Page.Settings && target == Page.Platforms -> true
+        initial == Page.Platforms && target == Page.Settings -> false
+        else -> true
+    }
 }
 
 class MainActivity : ComponentActivity() {
@@ -220,6 +235,10 @@ fun KuaishouApp(handoff: LaunchHandoff) {
             var page by rememberSaveable { mutableStateOf(Page.Home) }
             // 平台管理页的返回目标：从主页进入回主页，从设置进入回设置
             var platformsFrom by rememberSaveable { mutableStateOf(Page.Home) }
+            // 设置页滚动状态：提升到导航层持有，从子页面返回时保持原滚动位置
+            val settingsScrollState = remember { ScrollState(0) }
+            // 关于页主列表滚动状态：同上，从许可证/赞助/协议/更新日志返回时保持原位置
+            val aboutScrollState = remember { ScrollState(0) }
 
             // 小组件/分享进入：立即回到主页消费启动参数。
             // 否则参数会滞留在 handoff 中，等用户从设置/平台管理返回时才被应用（跨页残留 + 延迟弹键盘）。
@@ -227,196 +246,200 @@ fun KuaishouApp(handoff: LaunchHandoff) {
                 if (handoff.openHomeRequest.value > 0) page = Page.Home
             }
 
-            // 首次启动：未同意用户协议则弹窗（同意后方可使用）
-            var showAgreement by remember { mutableStateOf(false) }
-            LaunchedEffect(Unit) {
-                if (!prefs.agreementAccepted.first()) showAgreement = true
-            }
+        // 首次启动：未同意用户协议则弹窗（同意后方可使用）
+        var showAgreement by remember { mutableStateOf(false) }
+        LaunchedEffect(Unit) {
+            if (!prefs.agreementAccepted.first()) showAgreement = true
+        }
 
-            // 启动后按频率与提醒方式静默检查更新（手动模式不自动检查）
-            LaunchedEffect(Unit) {
-                GitHubUpdateChecker.autoCheck(context.applicationContext, prefs)
-            }
+        // 启动后按频率与提醒方式静默检查更新（手动模式不自动检查）
+        LaunchedEffect(Unit) {
+            GitHubUpdateChecker.autoCheck(context.applicationContext, prefs)
+        }
 
-            // 小组件内容同步：改默认平台 / 平台管理 / 搜索历史后，桌面已添加的小组件需重绘，
-            // 否则组件会一直显示旧数据。集中在此观察，而不是在各写入点散落调用。
-            LaunchedEffect(Unit) {
-                val watched: List<Flow<Any?>> = listOf(
-                    prefs.defaultPlatformId,
-                    prefs.enabledPlatformIds,
-                    prefs.customPlatforms,
-                    prefs.history,
-                    prefs.platformClicks,
-                )
-                combine(watched) { it }
-                    .collectLatest {
-                        // 一次搜索会连写历史与点击计数，用 collectLatest 合并短时间内的连续改动
-                        delay(400)
-                        WidgetHelper.updateAllWidgets(context)
-                    }
-            }
-
-            // 子页按返回键逐级回退：平台管理回其来源页；引导/关于回设置；其余子页回主页；主页按返回键退出
-            BackHandler(enabled = page != Page.Home) {
-                page = when (page) {
-                    Page.Platforms -> platformsFrom
-                    Page.Tutorial, Page.About, Page.Update, Page.WidgetSettings -> Page.Settings
-                    Page.Changelog -> Page.About
-                    else -> Page.Home
+        // 小组件内容同步：改默认平台 / 平台管理 / 搜索历史后，桌面已添加的小组件需重绘，
+        // 否则组件会一直显示旧数据（默认平台预选错、平台列表过期、最近搜索标签不更新）。
+        // 集中在此观察，而不是在各写入点散落调用 —— 后者新增写入点时极易漏刷。
+        // widgetXxx 系列偏好已由「小组件设置」页的 apply() 刷新，故不重复观察。
+        LaunchedEffect(Unit) {
+            val watched: List<Flow<Any?>> = listOf(
+                prefs.defaultPlatformId,
+                prefs.enabledPlatformIds,
+                prefs.customPlatforms,
+                prefs.history,
+                prefs.platformClicks,
+            )
+            combine(watched) { it }
+                .collectLatest {
+                    // 一次搜索会连写历史与点击计数，用 collectLatest 合并短时间内的连续改动
+                    delay(400)
+                    WidgetHelper.updateAllWidgets(context)
                 }
+        }
+
+        // 子页按返回键逐级回退：平台管理回其来源页；引导/关于回设置；其余子页回主页；主页按返回键退出
+        BackHandler(enabled = page != Page.Home) {
+            page = when (page) {
+                Page.Platforms -> platformsFrom
+                Page.Tutorial, Page.About, Page.Update, Page.WidgetSettings -> Page.Settings
+                Page.Changelog -> Page.About
+                else -> Page.Home
             }
+        }
 
-            // 协议弹窗期间拦截返回键（必须同意或退出）
-            BackHandler(enabled = showAgreement) { /* 不关闭 */ }
+        // 协议弹窗期间拦截返回键（必须同意或退出）
+        BackHandler(enabled = showAgreement) { /* 不关闭 */ }
 
-            Scaffold(containerColor = MiuixTheme.colorScheme.background) { innerPadding ->
-                // 全局页面过渡：水平平推 + 淡入淡出（MIUIX 风格，280ms，平滑缓动）
-                AnimatedContent(
-                    targetState = page,
-                    modifier = Modifier.fillMaxSize(),
-                    label = "pageTransition",
-                    transitionSpec = {
-                        val duration = 280
-                        val easing = FastOutSlowInEasing
-                        val forward = pageDepth(targetState) >= pageDepth(initialState)
-                        if (forward) {
-                            // 前进：新页面从右侧滑入 + 淡入；旧页面向左滑出 + 淡出
-                            (slideInHorizontally(
-                                initialOffsetX = { it },
-                                animationSpec = tween(duration, easing = easing),
-                            ) + fadeIn(animationSpec = tween(duration, easing = easing)))
-                                .togetherWith(
-                                    slideOutHorizontally(
-                                        targetOffsetX = { -it },
-                                        animationSpec = tween(duration, easing = easing),
-                                    ) + fadeOut(animationSpec = tween(duration, easing = easing)),
-                                )
-                        } else {
-                            // 返回：新页面从左侧滑入 + 淡入；旧页面向右滑出 + 淡出
-                            (slideInHorizontally(
-                                initialOffsetX = { -it },
-                                animationSpec = tween(duration, easing = easing),
-                            ) + fadeIn(animationSpec = tween(duration, easing = easing)))
-                                .togetherWith(
-                                    slideOutHorizontally(
-                                        targetOffsetX = { it },
-                                        animationSpec = tween(duration, easing = easing),
-                                    ) + fadeOut(animationSpec = tween(duration, easing = easing)),
-                                )
-                        }
+        Scaffold(containerColor = MiuixTheme.colorScheme.background) { innerPadding ->
+            // 全局页面过渡：水平平推 + 淡入淡出（MIUIX 风格，280ms，平滑缓动）
+            AnimatedContent(
+                targetState = page,
+                modifier = Modifier.fillMaxSize(),
+                label = "pageTransition",
+                transitionSpec = {
+                    val duration = 280
+                    val easing = FastOutSlowInEasing
+                    val forward = isForward(initialState, targetState)
+                    if (forward) {
+                        // 前进：新页面从右侧滑入 + 淡入；旧页面向左滑出 + 淡出
+                        (slideInHorizontally(
+                            initialOffsetX = { it },
+                            animationSpec = tween(duration, easing = easing),
+                        ) + fadeIn(animationSpec = tween(duration, easing = easing)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    targetOffsetX = { -it },
+                                    animationSpec = tween(duration, easing = easing),
+                                ) + fadeOut(animationSpec = tween(duration, easing = easing)),
+                            )
+                    } else {
+                        // 返回：新页面从左侧滑入 + 淡入；旧页面向右滑出 + 淡出
+                        (slideInHorizontally(
+                            initialOffsetX = { -it },
+                            animationSpec = tween(duration, easing = easing),
+                        ) + fadeIn(animationSpec = tween(duration, easing = easing)))
+                            .togetherWith(
+                                slideOutHorizontally(
+                                    targetOffsetX = { it },
+                                    animationSpec = tween(duration, easing = easing),
+                                ) + fadeOut(animationSpec = tween(duration, easing = easing)),
+                            )
+                    }
+                },
+            ) { currentPage ->
+                when (currentPage) {
+                Page.Home -> HomeScreen(
+                    padding = innerPadding,
+                    prefs = prefs,
+                    engine = engine,
+                    handoff = handoff,
+                    vm = vm,
+                    onOpenPlatforms = {
+                        platformsFrom = Page.Home
+                        page = Page.Platforms
                     },
-                ) { currentPage ->
-                    when (currentPage) {
-                        Page.Home -> HomeScreen(
-                            padding = innerPadding,
-                            prefs = prefs,
-                            engine = engine,
-                            handoff = handoff,
-                            vm = vm,
-                            onOpenPlatforms = {
-                                platformsFrom = Page.Home
-                                page = Page.Platforms
-                            },
-                            onOpenSettings = { page = Page.Settings },
-                        )
-                        Page.Platforms -> PlatformManageScreen(
-                            padding = innerPadding,
-                            prefs = prefs,
-                            onBack = { page = Page.Home },
-                        )
-                        Page.Settings -> SettingsScreen(
-                            padding = innerPadding,
-                            prefs = prefs,
-                            onBack = { page = Page.Home },
-                            onOpenTutorial = { page = Page.Tutorial },
-                            onOpenAbout = { page = Page.About },
-                            onOpenPlatforms = {
-                                platformsFrom = Page.Settings
-                                page = Page.Platforms
-                            },
-                            onOpenUpdate = { page = Page.Update },
-                            onOpenWidgetSettings = { page = Page.WidgetSettings },
-                        )
-                        Page.WidgetSettings -> WidgetSettingsScreen(
-                            padding = innerPadding,
-                            prefs = prefs,
-                            onBack = { page = Page.Settings },
-                        )
-                        Page.Tutorial -> TutorialScreen(
-                            padding = innerPadding,
-                            onBack = { page = Page.Settings },
-                        )
-                        Page.About -> AboutScreen(
-                            padding = innerPadding,
-                            prefs = prefs,
-                            onBack = { page = Page.Settings },
-                            onOpenChangelog = { page = Page.Changelog },
-                        )
-                        Page.Changelog -> ChangelogScreen(
-                            padding = innerPadding,
-                            onBack = { page = Page.About },
-                        )
-                        Page.Update -> UpdateScreen(
-                            padding = innerPadding,
-                            prefs = prefs,
-                            onBack = { page = Page.Settings },
-                        )
-                    }
+                    onOpenSettings = { page = Page.Settings },
+                )
+                Page.Platforms -> PlatformManageScreen(
+                    padding = innerPadding,
+                    prefs = prefs,
+                    onBack = { page = Page.Home },
+                )
+                Page.Settings -> SettingsScreen(
+                    padding = innerPadding,
+                    prefs = prefs,
+                    onBack = { page = Page.Home },
+                    onOpenTutorial = { page = Page.Tutorial },
+                    onOpenAbout = { page = Page.About },
+                    onOpenPlatforms = {
+                        platformsFrom = Page.Settings
+                        page = Page.Platforms
+                    },
+                    onOpenUpdate = { page = Page.Update },
+                    onOpenWidgetSettings = { page = Page.WidgetSettings },
+                    scrollState = settingsScrollState,
+                )
+                Page.WidgetSettings -> WidgetSettingsScreen(
+                    padding = innerPadding,
+                    prefs = prefs,
+                    onBack = { page = Page.Settings },
+                )
+                Page.Tutorial -> TutorialScreen(
+                    padding = innerPadding,
+                    onBack = { page = Page.Settings },
+                )
+                Page.About -> AboutScreen(
+                    padding = innerPadding,
+                    prefs = prefs,
+                    onBack = { page = Page.Settings },
+                    onOpenChangelog = { page = Page.Changelog },
+                    scrollState = aboutScrollState,
+                )
+                Page.Changelog -> ChangelogScreen(
+                    padding = innerPadding,
+                    onBack = { page = Page.About },
+                )
+                Page.Update -> UpdateScreen(
+                    padding = innerPadding,
+                    prefs = prefs,
+                    onBack = { page = Page.Settings },
+                )
                 }
             }
+        }
 
-            // ---- 首次使用协议弹窗（窗口层，独立于 Scaffold）----
-            if (showAgreement) {
-                WindowDialog(
-                    show = true,
-                    title = "用户协议与隐私说明",
-                    summary = "请阅读并同意《用户协议》与《隐私政策》后使用；不同意将无法使用本应用。",
-                    onDismissRequest = { /* 必须同意或退出，点击外部不关闭 */ },
-                    onDismissFinished = { },
+        // ---- 首次使用协议弹窗（窗口层，独立于 Scaffold）----
+        if (showAgreement) {
+            WindowDialog(
+                show = true,
+                title = "用户协议与隐私说明",
+                summary = "请阅读并同意《用户协议》与《隐私政策》后使用；不同意将无法使用本应用。",
+                onDismissRequest = { /* 必须同意或退出，点击外部不关闭 */ },
+                onDismissFinished = { },
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 4.dp),
                 ) {
-                    Column(
+                    // 协议正文：独立可滚动区域（高度上限 400dp），确保下方按钮始终可见、可点击
+                    Box(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 4.dp),
+                            .weight(1f, fill = true)
+                            .heightIn(max = 400.dp)
+                            .verticalScroll(rememberScrollState())
+                            .padding(end = 4.dp),
                     ) {
-                        // 协议正文：独立可滚动区域（高度上限 400dp），确保下方按钮始终可见、可点击
-                        Box(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .weight(1f, fill = true)
-                                .heightIn(max = 400.dp)
-                                .verticalScroll(rememberScrollState())
-                                .padding(end = 4.dp),
-                        ) {
-                            Text(
-                                USER_AGREEMENT + "\n\n" + PRIVACY_POLICY,
-                                fontSize = 13.sp,
-                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                            )
-                        }
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                        ) {
-                            TextButton(
-                                text = "不同意并退出",
-                                onClick = { (context as? Activity)?.finish() },
-                                modifier = Modifier.weight(1f),
-                            )
-                            Button(
-                                onClick = {
-                                    scope.launch { prefs.setAgreementAccepted(true) }
-                                    showAgreement = false
-                                },
-                                colors = ButtonDefaults.buttonColorsPrimary(),
-                                modifier = Modifier.weight(1f),
-                            ) { Text("同意并继续") }
-                        }
+                        Text(
+                            USER_AGREEMENT + "\n\n" + PRIVACY_POLICY,
+                            fontSize = 13.sp,
+                            color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    ) {
+                        TextButton(
+                            text = "不同意并退出",
+                            onClick = { (context as? Activity)?.finish() },
+                            modifier = Modifier.weight(1f),
+                        )
+                        Button(
+                            onClick = {
+                                scope.launch { prefs.setAgreementAccepted(true) }
+                                showAgreement = false
+                            },
+                            colors = ButtonDefaults.buttonColorsPrimary(),
+                            modifier = Modifier.weight(1f),
+                        ) { Text("同意并继续") }
                     }
                 }
             }
+        }
         } // CompositionLocalProvider 提供 LocalNavigationEventDispatcherOwner 结束
     }
 }
