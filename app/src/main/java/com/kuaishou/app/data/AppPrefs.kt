@@ -29,7 +29,7 @@ const val UPDATE_FREQ_DAILY = "daily"
 const val UPDATE_FREQ_WEEKLY = "weekly"
 const val UPDATE_FREQ_MONTHLY = "monthly"
 
-/** 更新渠道：stable / beta / all。 */
+/** 更新渠道：stable / beta / all（保留常量仅供历史记录展示，渠道设置已移除）。 */
 const val UPDATE_CHANNEL_STABLE = "stable"
 const val UPDATE_CHANNEL_BETA = "beta"
 const val UPDATE_CHANNEL_ALL = "all"
@@ -99,9 +99,7 @@ class AppPrefs(private val context: Context) {
     private val keyShowStats = booleanPreferencesKey("show_stats")
     private val keyUpdateCheckFreq = stringPreferencesKey("update_check_freq")
     private val keyAutoDownload = booleanPreferencesKey("auto_download")
-    private val keyWifiOnly = booleanPreferencesKey("wifi_only")
     private val keyAutoInstall = booleanPreferencesKey("auto_install")
-    private val keyUpdateChannel = stringPreferencesKey("update_channel")
     private val keyUpdateReminder = stringPreferencesKey("update_reminder")
     private val keyLastUpdateCheck = longPreferencesKey("last_update_check")
     private val keyUpdateHistory = stringPreferencesKey("update_history")
@@ -223,17 +221,9 @@ class AppPrefs(private val context: Context) {
     val autoDownload: Flow<Boolean> =
         context.dataStore.data.map { it[keyAutoDownload] ?: false }
 
-    /** 仅 Wi-Fi 下自动下载，默认开启。 */
-    val wifiOnlyDownload: Flow<Boolean> =
-        context.dataStore.data.map { it[keyWifiOnly] ?: true }
-
     /** 下载后自动安装开关，默认关闭。 */
     val autoInstall: Flow<Boolean> =
         context.dataStore.data.map { it[keyAutoInstall] ?: false }
-
-    /** 更新渠道：stable / beta / all，默认稳定版。 */
-    val updateChannel: Flow<String> =
-        context.dataStore.data.map { it[keyUpdateChannel] ?: UPDATE_CHANNEL_STABLE }
 
     /** 更新提醒方式：notification / dialog / none，默认通知栏。 */
     val updateReminder: Flow<String> =
@@ -327,19 +317,9 @@ class AppPrefs(private val context: Context) {
         context.dataStore.edit { it[keyAutoDownload] = enabled }
     }
 
-    /** 设置仅 Wi-Fi 下下载开关。 */
-    suspend fun setWifiOnlyDownload(enabled: Boolean) {
-        context.dataStore.edit { it[keyWifiOnly] = enabled }
-    }
-
     /** 设置下载后自动安装开关。 */
     suspend fun setAutoInstall(enabled: Boolean) {
         context.dataStore.edit { it[keyAutoInstall] = enabled }
-    }
-
-    /** 设置更新渠道。 */
-    suspend fun setUpdateChannel(channel: String) {
-        context.dataStore.edit { it[keyUpdateChannel] = channel }
     }
 
     /** 设置更新提醒方式。 */
@@ -414,9 +394,7 @@ class AppPrefs(private val context: Context) {
             prefs[keyHapticsEnabled] = true
             prefs[keyUpdateCheckFreq] = UPDATE_FREQ_WEEKLY
             prefs[keyAutoDownload] = false
-            prefs[keyWifiOnly] = true
             prefs[keyAutoInstall] = false
-            prefs[keyUpdateChannel] = UPDATE_CHANNEL_STABLE
             prefs[keyUpdateReminder] = UPDATE_REMINDER_NOTIFICATION
             prefs[keyLastUpdateCheck] = 0L
             prefs.remove(keyUpdateHistory)
@@ -573,9 +551,7 @@ class AppPrefs(private val context: Context) {
             .put("haptics_enabled", data[keyHapticsEnabled] ?: true)
             .put("update_check_freq", data[keyUpdateCheckFreq] ?: UPDATE_FREQ_WEEKLY)
             .put("auto_download", data[keyAutoDownload] ?: false)
-            .put("wifi_only", data[keyWifiOnly] ?: true)
             .put("auto_install", data[keyAutoInstall] ?: false)
-            .put("update_channel", data[keyUpdateChannel] ?: UPDATE_CHANNEL_STABLE)
             .put("update_reminder", data[keyUpdateReminder] ?: UPDATE_REMINDER_NOTIFICATION)
             .put("last_update_check", data[keyLastUpdateCheck] ?: 0L)
             .put("update_history", data[keyUpdateHistory] ?: "")
@@ -623,9 +599,7 @@ class AppPrefs(private val context: Context) {
             prefs[keyHapticsEnabled] = obj.optBoolean("haptics_enabled", true)
             prefs[keyUpdateCheckFreq] = obj.optString("update_check_freq", UPDATE_FREQ_WEEKLY)
             prefs[keyAutoDownload] = obj.optBoolean("auto_download", false)
-            prefs[keyWifiOnly] = obj.optBoolean("wifi_only", true)
             prefs[keyAutoInstall] = obj.optBoolean("auto_install", false)
-            prefs[keyUpdateChannel] = obj.optString("update_channel", UPDATE_CHANNEL_STABLE)
             prefs[keyUpdateReminder] = obj.optString("update_reminder", UPDATE_REMINDER_NOTIFICATION)
             prefs[keyLastUpdateCheck] = obj.optLong("last_update_check", 0L)
             obj.optString("update_history").takeIf { it.isNotBlank() }?.let { prefs[keyUpdateHistory] = it }

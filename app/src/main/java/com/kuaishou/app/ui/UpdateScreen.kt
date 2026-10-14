@@ -1,8 +1,13 @@
 package com.kuaishou.app.ui
 
+import android.Manifest
 import android.content.Context
+import android.content.pm.PackageManager
 import android.net.ConnectivityManager
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -36,11 +41,11 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.ContextCompat
 import com.kuaishou.app.data.AppPrefs
 import com.kuaishou.app.data.AppPrefs.UpdateRecord
 import com.kuaishou.app.data.UPDATE_CHANNEL_ALL
 import com.kuaishou.app.data.UPDATE_CHANNEL_BETA
-import com.kuaishou.app.data.UPDATE_CHANNEL_STABLE
 import com.kuaishou.app.data.UPDATE_FREQ_DAILY
 import com.kuaishou.app.data.UPDATE_FREQ_MANUAL
 import com.kuaishou.app.data.UPDATE_FREQ_MONTHLY
@@ -63,7 +68,6 @@ import top.yukonga.miuix.kmp.icon.MiuixIcons
 import top.yukonga.miuix.kmp.icon.extended.Back
 import top.yukonga.miuix.kmp.icon.extended.CloudFill
 import top.yukonga.miuix.kmp.icon.extended.Download
-import top.yukonga.miuix.kmp.icon.extended.Notes
 import top.yukonga.miuix.kmp.icon.extended.Refresh
 import top.yukonga.miuix.kmp.icon.extended.Report
 import top.yukonga.miuix.kmp.icon.extended.Update
@@ -83,9 +87,9 @@ private fun isNetworkAvailable(context: Context): Boolean {
 
 /**
  * 更新设置：将原先分散在设置页的更新系列功能整合到统一页面，分区展示。
- * - 检查与下载：检查频率 / 自动下载 / 仅 Wi-Fi 下载 / 自动安装
- * - 渠道与提醒：更新渠道 / 提醒方式
+ * - 检查与下载：检查频率 / 自动下载 / 自动安装 / 更新提醒方式（提醒方式并入「检查与下载」，渠道模块已移除）
  * - 历史与检查：更新历史 / 手动检查更新
+ * 任意网络下均可下载（不再区分 Wi-Fi）。
  */
 @Composable
 fun UpdateScreen(
@@ -99,15 +103,12 @@ fun UpdateScreen(
 
     val updateCheckFreq by prefs.updateCheckFreq.collectAsState(initial = UPDATE_FREQ_WEEKLY)
     val autoDownload by prefs.autoDownload.collectAsState(initial = false)
-    val wifiOnlyDownload by prefs.wifiOnlyDownload.collectAsState(initial = true)
     val autoInstall by prefs.autoInstall.collectAsState(initial = false)
-    val updateChannel by prefs.updateChannel.collectAsState(initial = UPDATE_CHANNEL_STABLE)
     val updateReminder by prefs.updateReminder.collectAsState(initial = UPDATE_REMINDER_NOTIFICATION)
     val lastUpdateCheck by prefs.lastUpdateCheck.collectAsState(initial = 0L)
     val updateHistory by prefs.updateHistory.collectAsState(initial = emptyList())
 
     var showCheckFreqDialog by remember { mutableStateOf(false) }
-    var showChannelDialog by remember { mutableStateOf(false) }
     var showReminderDialog by remember { mutableStateOf(false) }
     var showHistoryDialog by remember { mutableStateOf(false) }
     // 清空更新历史的二次确认
@@ -118,18 +119,19 @@ fun UpdateScreen(
     fun tick() = hapticTick(context, hapticsOn)
     fun toast(msg: String) = Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
 
+    // Android 13+ 通知权限请求
+    val requestNotificationPermission = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (!granted) toast("未授予通知权限，将无法在通知栏提醒更新")
+    }
+
     val checkFreqText = when (updateCheckFreq) {
         UPDATE_FREQ_MANUAL -> "手动检查"
         UPDATE_FREQ_DAILY -> "每天"
         UPDATE_FREQ_WEEKLY -> "每周"
         UPDATE_FREQ_MONTHLY -> "每月"
         else -> "每周"
-    }
-    val channelText = when (updateChannel) {
-        UPDATE_CHANNEL_STABLE -> "稳定版"
-        UPDATE_CHANNEL_BETA -> "测试版"
-        UPDATE_CHANNEL_ALL -> "全部渠道"
-        else -> "稳定版"
     }
     val reminderText = when (updateReminder) {
         UPDATE_REMINDER_NOTIFICATION -> "通知栏"
@@ -139,7 +141,6 @@ fun UpdateScreen(
     }
     val lastCheckText = if (lastUpdateCheck == 0L) "从未检查" else "上次检查：${formatTime(lastUpdateCheck)}"
 
-    /** 手动检查更新：真实查询 GitHub Releases，比对版本后反馈，并按开关触发下载/安装。 */
     /** 下载并（可选）安装 APK；无 APK 时回退到打开发布页。 */
     fun startDownload(info: GitHubUpdateChecker.UpdateInfo, installAfter: Boolean) {
         val apk = info.apkUrl
@@ -149,13 +150,13 @@ fun UpdateScreen(
             return
         }
         toast("开始下载 v${info.version}…")
-        GitHubUpdateChecker.downloadApk(context, apk, wifiOnlyDownload) { uri ->
+        GitHubUpdateChecker.downloadApk(context, apk) { uri ->
             if (uri != null) {
                 if (installAfter && GitHubUpdateChecker.canInstallPackages(context)) {
                     GitHubUpdateChecker.installApk(context.applicationContext, uri)
                 } else if (installAfter) {
                     toast("请先在系统设置中允许「安装未知应用」")
-                    GitHubUpdateChecker.openRelease(context, info.releaseUrl)
+                    GitHubUpdateChecker.openInstallSettings(context)
                 } else {
                     toast("下载完成，请点击系统通知或在下载管理中安装")
                 }
@@ -176,7 +177,7 @@ fun UpdateScreen(
         }
         val current = GitHubUpdateChecker.currentVersion(context)
         scope.launch {
-            when (val result = GitHubUpdateChecker.check(updateChannel, current)) {
+            when (val result = GitHubUpdateChecker.check(current)) {
                 is GitHubUpdateChecker.CheckResult.UpToDate -> {
                     prefs.setLastUpdateCheck(System.currentTimeMillis())
                     toast("已是最新版本（v$current）")
@@ -193,7 +194,6 @@ fun UpdateScreen(
                         UpdateRecord(
                             version = info.version,
                             time = if (info.publishedAt > 0) info.publishedAt else System.currentTimeMillis(),
-                            channel = updateChannel,
                             status = "发现新版本",
                         ),
                     )
@@ -213,7 +213,7 @@ fun UpdateScreen(
         CommonTopAppBar("更新设置", onBack)
 
         Text(
-            "管理软件更新的检查、下载、安装、渠道与提醒，并查看更新历史。",
+            "管理软件更新的检查、下载、安装与提醒，并查看更新历史。",
             fontSize = 13.sp,
             color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -238,22 +238,9 @@ fun UpdateScreen(
                     toast("自动下载更新已${if (v) "开启" else "关闭"}")
                 },
                 title = "自动下载更新",
-                summary = "发现新版本时自动下载安装包",
+                summary = "发现新版本时自动下载安装包（任意网络下均可下载）",
                 startAction = {
                     Icon(MiuixIcons.Download, null, tint = Color(0xFF555555), modifier = Modifier.size(38.dp).padding(end = 16.dp))
-                },
-            )
-            PreferenceSwitch(
-                checked = wifiOnlyDownload,
-                enabled = autoDownload,
-                onCheckedChange = { v ->
-                    scope.launch { prefs.setWifiOnlyDownload(v) }
-                    toast("仅 Wi-Fi 下载已${if (v) "开启" else "关闭"}")
-                },
-                title = "仅 Wi-Fi 下下载",
-                summary = if (autoDownload) "避免消耗移动数据流量" else "需先开启「自动下载更新」",
-                startAction = {
-                    Icon(MiuixIcons.CloudFill, null, tint = Color(0xFF555555), modifier = Modifier.size(38.dp).padding(end = 16.dp))
                 },
             )
             PreferenceSwitch(
@@ -267,20 +254,6 @@ fun UpdateScreen(
                 startAction = {
                     Icon(MiuixIcons.Update, null, tint = Color(0xFF555555), modifier = Modifier.size(38.dp).padding(end = 16.dp))
                 },
-            )
-        }
-
-        // ---- 渠道与提醒 ----
-        SmallTitle("渠道与提醒", insideMargin = PaddingValues(start = 16.dp, top = 16.dp))
-        Card(modifier = Modifier.padding(horizontal = 16.dp)) {
-            BasicComponent(
-                title = "更新渠道",
-                summary = "当前：$channelText",
-                startAction = {
-                    Icon(MiuixIcons.Notes, null, tint = Color(0xFF555555), modifier = Modifier.size(38.dp).padding(end = 16.dp))
-                },
-                endActions = { Chevron() },
-                onClick = { showChannelDialog = true },
             )
             BasicComponent(
                 title = "更新提醒方式",
@@ -334,24 +307,6 @@ fun UpdateScreen(
         onDismiss = { showCheckFreqDialog = false },
     )
 
-    // ---- 更新渠道 ----
-    OptionDialog(
-        show = showChannelDialog,
-        title = "更新渠道",
-        options = listOf(
-            Triple(UPDATE_CHANNEL_STABLE, "稳定版", "经过充分测试，推荐日常使用"),
-            Triple(UPDATE_CHANNEL_BETA, "测试版", "抢先体验新功能，可能不稳定"),
-            Triple(UPDATE_CHANNEL_ALL, "全部渠道", "同时接收稳定版与测试版推送"),
-        ),
-        selected = updateChannel,
-        onSelect = {
-            scope.launch { prefs.setUpdateChannel(it) }
-            tick()
-            showChannelDialog = false
-        },
-        onDismiss = { showChannelDialog = false },
-    )
-
     // ---- 更新提醒方式 ----
     OptionDialog(
         show = showReminderDialog,
@@ -365,6 +320,13 @@ fun UpdateScreen(
         onSelect = {
             scope.launch { prefs.setUpdateReminder(it) }
             tick()
+            // 选择「通知栏提醒」且 Android 13+ 未授权时，请求系统通知权限
+            if (it == UPDATE_REMINDER_NOTIFICATION &&
+                Build.VERSION.SDK_INT >= 33 &&
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+            ) {
+                requestNotificationPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
             showReminderDialog = false
         },
         onDismiss = { showReminderDialog = false },
