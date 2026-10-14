@@ -6,10 +6,12 @@
 
     <!-- 更新检查与下载需要联网 -->
     <uses-permission android:name="android.permission.INTERNET" />
-    <!-- 判断网络状态（仅 Wi-Fi 下载等） -->
+    <!-- 判断网络状态 -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- 下载后安装未知来源应用 -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
+    <!-- Android 13+ 通知栏更新提醒 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
     <!-- Android 11+ 包可见性：平台 App 包名 + 浏览器，用于唤起与网页兜底 -->
     <queries>

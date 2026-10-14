@@ -28,6 +28,24 @@ data class VersionLog(
 /** 版本迭代记录列表（newest first）。 */
 val versionLogs: List<VersionLog> = listOf(
     VersionLog(
+        version = "2.0.3-1014",
+        date = "2026-10-14",
+        changes = listOf(
+            // ---- 新增 ----
+            ChangeItem(ChangeType.New, "平台跳转兜底：未安装主 App 时自动唤起同系版本（如未装抖音、装有抖音极速版，点击抖音自动跳转极速版），装了两个时仍优先主 App。"),
+            ChangeItem(ChangeType.New, "更新设置支持「下载后自动安装」：下载完成后直接拉起安装，若系统未授权「安装未知应用」自动跳转系统设置页。"),
+            ChangeItem(ChangeType.New, "更新提醒支持通知栏提醒：接入系统通知权限，新版本到达时在通知栏提示。"),
+            // ---- 优化 ----
+            ChangeItem(ChangeType.Optimize, "更新设置精简：移除更新渠道与「仅 Wi-Fi 下载」模块，检查/下载/提醒集中在一个分组，任意网络下均可下载。"),
+            ChangeItem(ChangeType.Optimize, "从子页面返回设置页 / 关于页时保持原滚动位置，不再回到页面顶部。"),
+            ChangeItem(ChangeType.Optimize, "设置页搜索框改用主题色并增加描边，深浅色模式下边界均清晰；平台管理页首次进入不再逐行播放展开动画，跳转更流畅。"),
+            // ---- 修复 ----
+            ChangeItem(ChangeType.Fix, "修复深色模式下设置页搜索框不变色、边界不清的问题。"),
+            ChangeItem(ChangeType.Fix, "修复从子页面返回设置页 / 关于应用页时回到最顶端的问题。"),
+            ChangeItem(ChangeType.Fix, "修复设置页进入平台管理返回时动画方向不一致的问题。"),
+        ),
+    ),
+    VersionLog(
         version = "2.0.2-1010",
         date = "2026-10-10",
         changes = listOf(
