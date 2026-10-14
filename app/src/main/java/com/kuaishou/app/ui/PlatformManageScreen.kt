@@ -2,6 +2,7 @@ package com.kuaishou.app.ui
 
 import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.EnterTransition
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
@@ -249,6 +250,10 @@ fun PlatformManageScreen(
                     val starInteraction = remember(platform.id) { MutableInteractionSource() }
                     val starPressed by starInteraction.collectIsPressedAsState()
                     // 折叠/展开动画：高度伸缩 + 淡入淡出
+                    // 首次进入页面不播放展开动画（否则整页所有行同时 expand+fade，造成跳转卡顿延迟感）；
+                    // 之后手动折叠/展开分类时动画照常
+                    var firstEntry by remember { mutableStateOf(true) }
+                    LaunchedEffect(Unit) { firstEntry = false }
                     AnimatedVisibility(
                         visible = expanded,
                         // zIndex 与「位移 / 悬浮缩放」必须挂在 item 根：
@@ -270,7 +275,7 @@ fun PlatformManageScreen(
                                     translationY = animatedDisplace + dropAnim.value
                                 }
                             },
-                        enter = expandVertically() + fadeIn(),
+                        enter = if (firstEntry) EnterTransition.None else expandVertically() + fadeIn(),
                         exit = shrinkVertically() + fadeOut(),
                     ) {
                         GroupCardItem(

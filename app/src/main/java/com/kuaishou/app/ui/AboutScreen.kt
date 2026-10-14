@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -89,6 +90,7 @@ fun AboutScreen(
     prefs: AppPrefs,
     onBack: () -> Unit,
     onOpenChangelog: () -> Unit = {},
+    scrollState: ScrollState,
 ) {
     var sub by rememberSaveable { mutableStateOf(AboutSubPage.About) }
 
@@ -101,6 +103,7 @@ fun AboutScreen(
             onBack = onBack,
             onOpen = { sub = it },
             onOpenChangelog = onOpenChangelog,
+            scrollState = scrollState,
         )
         AboutSubPage.License -> LicensePage(
             padding = padding,
@@ -146,13 +149,15 @@ private fun AboutMain(
     onBack: () -> Unit,
     onOpen: (AboutSubPage) -> Unit,
     onOpenChangelog: () -> Unit,
+    scrollState: ScrollState,
 ) {
     val context = LocalContext.current
 
     Column(
         modifier = Modifier
             .padding(padding)
-            .verticalScroll(rememberScrollState()),
+            // 滚动状态由导航层持有：从子页（许可证/赞助/协议/更新日志）返回时保持原位置
+            .verticalScroll(scrollState),
     ) {
         CommonTopAppBar("关于应用", onBack)
 
