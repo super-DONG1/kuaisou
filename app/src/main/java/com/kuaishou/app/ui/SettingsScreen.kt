@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.KeyboardOptions
@@ -30,6 +31,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.role
@@ -58,6 +60,7 @@ import top.yukonga.miuix.kmp.basic.Switch
 import top.yukonga.miuix.kmp.basic.Text
 import top.yukonga.miuix.kmp.basic.TextButton
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -105,6 +108,7 @@ fun SettingsScreen(
     onOpenPlatforms: () -> Unit,
     onOpenUpdate: () -> Unit,
     onOpenWidgetSettings: () -> Unit,
+    scrollState: ScrollState,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -199,7 +203,7 @@ fun SettingsScreen(
         SettingItem("haptics", "data", "触感反馈", "跳转、复制、清空时轻微震动", "震动 触感 反馈 触觉"),
         SettingItem("clearHistory", "data", "清空最近搜索", if (historyCount == 0) "暂无记录" else "$historyCount 条", "清空 历史 搜索 记录 删除"),
         SettingItem("about", "about", "关于应用", "版本 v$appVersionName · 协议 · 致谢", "关于 版本 协议 致谢 信息"),
-        SettingItem("updateSettings", "update", "更新设置", "检查频率 · 渠道 · 历史 · 手动检查", "更新 升级 版本 设置 检查 渠道 下载 安装"),
+        SettingItem("updateSettings", "update", "更新设置", "检查频率 · 历史 · 手动检查", "更新 升级 版本 设置 检查 渠道 下载 安装"),
     )
 
     val lowerQ = searchQuery.trim().lowercase()
@@ -345,7 +349,7 @@ fun SettingsScreen(
                             )
                             "updateSettings" -> BasicComponent(
                                 title = "更新设置",
-                                summary = "更新检查、下载安装、渠道与历史",
+                                summary = "更新检查、下载安装与提醒",
                                 startAction = {
                                     Icon(MiuixIcons.Update, null, tint = Color(0xFF555555), modifier = Modifier.size(38.dp).padding(end = 16.dp))
                                 },
@@ -384,10 +388,11 @@ fun SettingsScreen(
         Spacer(Modifier.height(8.dp))
 
         // ---- 设置内容（随搜索结果实时筛选，跨分类展示）----
+        // 滚动状态由外部（MainActivity）持有，子页面返回时保持原滚动位置
         Column(
             modifier = Modifier
                 .weight(1f)
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scrollState)
                 .padding(horizontal = 8.dp),
         ) {
             SettingsContentImpl()
@@ -589,9 +594,11 @@ private data class SettingCategory(
 )
 
 /** 设置页顶部搜索框：与主页同款胶囊结构（前置放大镜 + BasicTextField + 清除），
- *  但按设置页规范用纯浅灰 #F2F2F2 无边胶囊；点击即进入输入态，实时过滤下方设置项（不沿用主页跳转逻辑）。 */
+ *  用主题表面色做胶囊底 + 主题色描边（静止 30% 透明、聚焦实色），深浅色下边界均清晰；
+ *  点击即进入输入态，实时过滤下方设置项（不沿用主页跳转逻辑）。 */
 @Composable
 private fun SettingsSearchBar(query: String, onQueryChange: (String) -> Unit) {
+    var fieldFocused by remember { mutableStateOf(false) }
     val capsuleShape = RoundedCornerShape(percent = 50)
     Box(
         modifier = Modifier
@@ -599,18 +606,24 @@ private fun SettingsSearchBar(query: String, onQueryChange: (String) -> Unit) {
             .padding(horizontal = 16.dp)
             .height(48.dp)
             .clip(capsuleShape)
-            // 极浅灰底、无边框（设置页规范；与主页胶囊同形、同左对齐排版）
-            .background(Color(0xFFF2F2F2)),
+            // 主题表面色底 + 主题色细描边（与主页搜索框同源；深色模式下边界依然清晰）
+            .background(MiuixTheme.colorScheme.surfaceContainerHigh)
+            .border(
+                width = 2.dp,
+                color = if (fieldFocused) MiuixTheme.colorScheme.primary
+                else MiuixTheme.colorScheme.primary.copy(alpha = 0.30f),
+                shape = capsuleShape,
+            ),
     ) {
         Row(
             modifier = Modifier.fillMaxSize(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            // 前置细线放大镜：16dp 左内边距，18dp，#999999
+            // 前置细线放大镜：16dp 左内边距，18dp，弱化色（浅色下浅灰、深色下浅白）
             Icon(
                 painter = painterResource(R.drawable.ic_search),
                 contentDescription = null,
-                tint = Color(0xFF999999),
+                tint = MiuixTheme.colorScheme.onSurfaceVariantActions,
                 modifier = Modifier
                     .padding(start = 16.dp)
                     .size(18.dp),
@@ -624,7 +637,8 @@ private fun SettingsSearchBar(query: String, onQueryChange: (String) -> Unit) {
                         // 与放大镜间距 8dp；有内容时给清除按钮预留 44dp 右侧空间
                         start = 8.dp,
                         end = if (query.isNotEmpty()) 44.dp else 12.dp,
-                    ),
+                    )
+                    .onFocusChanged { fieldFocused = it.isFocused },
                 singleLine = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 textStyle = TextStyle(
@@ -642,7 +656,7 @@ private fun SettingsSearchBar(query: String, onQueryChange: (String) -> Unit) {
                         if (query.isEmpty()) {
                             Text(
                                 "搜索设置项...",
-                                color = Color(0xFF999999),
+                                color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                                 fontSize = 14.sp,
                                 maxLines = 1,
                             )
@@ -669,14 +683,14 @@ private fun SettingsSearchBar(query: String, onQueryChange: (String) -> Unit) {
                         modifier = Modifier
                             .size(24.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF000000).copy(alpha = 0.06f)),
+                            .background(MiuixTheme.colorScheme.onBackground.copy(alpha = 0.07f)),
                         contentAlignment = Alignment.Center,
                     ) {
                         Text(
                             "×",
                             fontSize = 16.sp,
                             fontWeight = FontWeight.Medium,
-                            color = Color(0xFF666666),
+                            color = MiuixTheme.colorScheme.onSurfaceVariantActions,
                         )
                     }
                 }
