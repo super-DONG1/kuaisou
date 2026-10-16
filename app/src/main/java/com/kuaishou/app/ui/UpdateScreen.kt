@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.Spacer
@@ -87,9 +88,8 @@ private fun isNetworkAvailable(context: Context): Boolean {
 
 /**
  * 更新设置：将原先分散在设置页的更新系列功能整合到统一页面，分区展示。
- * - 检查与下载：检查频率 / 自动下载 / 自动安装 / 更新提醒方式（提醒方式并入「检查与下载」，渠道模块已移除）
+ * - 检查与下载：检查频率 / 自动下载 / 自动安装 / 更新提醒方式
  * - 历史与检查：更新历史 / 手动检查更新
- * 任意网络下均可下载（不再区分 Wi-Fi）。
  */
 @Composable
 fun UpdateScreen(
@@ -152,11 +152,15 @@ fun UpdateScreen(
         toast("开始下载 v${info.version}…")
         GitHubUpdateChecker.downloadApk(context, apk) { uri ->
             if (uri != null) {
-                if (installAfter && GitHubUpdateChecker.canInstallPackages(context)) {
-                    GitHubUpdateChecker.installApk(context.applicationContext, uri)
-                } else if (installAfter) {
-                    toast("请先在系统设置中允许「安装未知应用」")
-                    GitHubUpdateChecker.openInstallSettings(context)
+                if (installAfter) {
+                    when (GitHubUpdateChecker.installDownloadedApk(context, uri)) {
+                        GitHubUpdateChecker.InstallAction.Installing -> toast("下载完成，正在拉起安装…")
+                        GitHubUpdateChecker.InstallAction.PromptedByNotification -> toast("下载完成，请点击通知安装新版本")
+                        GitHubUpdateChecker.InstallAction.NeedPermission -> {
+                            toast("请先在系统设置中允许「安装未知应用」")
+                            GitHubUpdateChecker.openInstallSettings(context)
+                        }
+                    }
                 } else {
                     toast("下载完成，请点击系统通知或在下载管理中安装")
                 }
@@ -238,7 +242,7 @@ fun UpdateScreen(
                     toast("自动下载更新已${if (v) "开启" else "关闭"}")
                 },
                 title = "自动下载更新",
-                summary = "发现新版本时自动下载安装包（任意网络下均可下载）",
+                summary = "发现新版本时自动下载安装包",
                 startAction = {
                     Icon(MiuixIcons.Download, null, tint = Color(0xFF555555), modifier = Modifier.size(38.dp).padding(end = 16.dp))
                 },
@@ -429,7 +433,9 @@ fun UpdateScreen(
         )
     }
 
-    // ---- 检查结果 ----
+    // ---- 检查结果（发现新版本弹窗）----
+    // 说明区限高滚动防止内容过长时与按钮重叠；仅保留「更新 / 取消」两个按钮，
+    // 「更新」一键完成下载 + 自动安装（未授权则跳系统设置页）
     updateResult?.let { info ->
         OverlayDialog(
             show = true,
@@ -437,53 +443,52 @@ fun UpdateScreen(
             onDismissRequest = { updateResult = null },
             onDismissFinished = { updateResult = null },
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .verticalScroll(rememberScrollState())
-                    .padding(bottom = 8.dp),
-            ) {
-                if (info.prerelease) {
+            Column(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(max = 280.dp)
+                        .verticalScroll(rememberScrollState()),
+                ) {
+                    if (info.prerelease) {
+                        Text(
+                            "测试版（Pre-release）",
+                            fontSize = 12.sp,
+                            color = MiuixTheme.colorScheme.primary,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                    }
                     Text(
-                        "测试版（Pre-release）",
+                        if (info.notes.isBlank()) "暂无更新说明。" else info.notes,
+                        fontSize = 13.sp,
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
+                        modifier = Modifier.padding(vertical = 8.dp),
+                    )
+                    Text(
+                        "发布时间：${if (info.publishedAt > 0) formatTime(info.publishedAt) else "未知"}",
                         fontSize = 12.sp,
-                        color = MiuixTheme.colorScheme.primary,
-                        modifier = Modifier.padding(bottom = 4.dp),
+                        color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
                     )
                 }
-                Text(
-                    if (info.notes.isBlank()) "暂无更新说明。" else info.notes,
-                    fontSize = 13.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                    modifier = Modifier.padding(vertical = 8.dp),
-                )
-                Text(
-                    "发布时间：${if (info.publishedAt > 0) formatTime(info.publishedAt) else "未知"}",
-                    fontSize = 12.sp,
-                    color = MiuixTheme.colorScheme.onSurfaceVariantSummary,
-                )
                 Spacer(Modifier.height(12.dp))
-                Button(
-                    onClick = {
-                        startDownload(info, autoInstall)
-                        updateResult = null
-                    },
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                ) { Text("下载安装") }
-                Spacer(Modifier.height(8.dp))
-                TextButton(
-                    text = "前往发布页",
-                    onClick = {
-                        GitHubUpdateChecker.openRelease(context, info.releaseUrl)
-                        updateResult = null
-                    },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                TextButton(
-                    text = "稍后",
-                    onClick = { updateResult = null },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    TextButton(
+                        text = "取消",
+                        onClick = { updateResult = null },
+                        modifier = Modifier.weight(1f),
+                    )
+                    Button(
+                        onClick = {
+                            startDownload(info, installAfter = true)
+                            updateResult = null
+                        },
+                        colors = ButtonDefaults.buttonColorsPrimary(),
+                        modifier = Modifier.weight(1f),
+                    ) { Text("更新") }
+                }
             }
         }
     }

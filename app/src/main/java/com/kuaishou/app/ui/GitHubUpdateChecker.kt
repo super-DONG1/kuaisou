@@ -1,9 +1,11 @@
 package com.kuaishou.app.ui
 
 import android.Manifest
+import android.app.ActivityManager
 import android.app.DownloadManager
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -212,7 +214,11 @@ object GitHubUpdateChecker {
         } catch (_: Exception) { 0L }
     }
 
-    /** 通过 DownloadManager 下载 APK；完成后回调本地 Uri（失败为 null）。 */
+    /**
+     * 通过 DownloadManager 下载 APK；完成后回调本地 Uri（失败为 null）。
+     * 关键：先注册完成广播再入队，避免小安装包秒下完时广播先于注册发出而永久漏收；
+     * 完成后优先取 LOCAL_URI（content://），为空时回退 LOCAL_FILENAME 拼 file://。
+     */
     fun downloadApk(context: Context, apkUrl: String, onResult: (Uri?) -> Unit) {
         val appCtx = context.applicationContext
         val dm = appCtx.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
@@ -223,7 +229,9 @@ object GitHubUpdateChecker {
             setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
             setDestinationInExternalFilesDir(appCtx, Environment.DIRECTORY_DOWNLOADS, "kuaisou_update.apk")
         }
-        val id = dm.enqueue(req)
+        // 先声明下载 id（-1 占位），注册完成后 enqueue 赋值；
+        // 接收器闭包捕获该 var，广播到达时读到的即真实 id
+        var id = -1L
         val receiver = object : BroadcastReceiver() {
             override fun onReceive(ctx: Context?, intent: Intent?) {
                 val ref = intent?.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1) ?: -1
@@ -233,19 +241,29 @@ object GitHubUpdateChecker {
                 var uri: Uri? = null
                 if (c.moveToFirst()) {
                     if (c.getInt(c.getColumnIndexOrThrow(DownloadManager.COLUMN_STATUS)) == DownloadManager.STATUS_SUCCESSFUL) {
-                        uri = Uri.parse(c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI)))
+                        // Android 10+ 下 LOCAL_URI 通常是 content://（MediaStore/FileProvider）；
+                        // 个别 ROM 可能返回空，回退 LOCAL_FILENAME（file://）兜底
+                        val localUri = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_URI))
+                        uri = if (!localUri.isNullOrBlank()) {
+                            Uri.parse(localUri)
+                        } else {
+                            val file = c.getString(c.getColumnIndexOrThrow(DownloadManager.COLUMN_LOCAL_FILENAME))
+                            if (file.isNullOrBlank()) null else Uri.fromFile(java.io.File(file))
+                        }
                     }
                 }
                 c.close()
                 onResult(uri)
             }
         }
+        // 先注册再入队：防止下载完成广播早于接收器注册而漏收
         ContextCompat.registerReceiver(
             appCtx,
             receiver,
             IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE),
             ContextCompat.RECEIVER_NOT_EXPORTED,
         )
+        id = dm.enqueue(req)
     }
 
     /** 是否允许安装未知来源应用（Android O+）。 */
@@ -258,12 +276,97 @@ object GitHubUpdateChecker {
 
     /** 拉起系统安装器安装本地 APK。 */
     fun installApk(context: Context, uri: Uri) {
+        val appCtx = context.applicationContext
         val intent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
             setDataAndType(uri, "application/vnd.android.package-archive")
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
+        try {
+            appCtx.startActivity(intent)
+        } catch (e: Exception) {
+            // 个别 ROM 对 ACTION_INSTALL_PACKAGE 支持不佳，回退到 ACTION_VIEW 安装
+            val fallback = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                appCtx.startActivity(fallback)
+            } catch (e2: Exception) {
+                // 均失败：留给调用方提示
+            }
+        }
+    }
+
+    /** 下载完成后的安装动作，供调用方给出对应反馈。 */
+    sealed class InstallAction {
+        /** 已直接拉起系统安装器。 */
+        data object Installing : InstallAction()
+        /** 应用在后台无法直接弹安装器，已发「点击安装」通知引导。 */
+        data object PromptedByNotification : InstallAction()
+        /** 未授予「安装未知应用」权限，需跳系统设置页。 */
+        data object NeedPermission : InstallAction()
+    }
+
+    /**
+     * 下载完成后的自动安装决策（前台直接装；后台发通知引导，规避 Android 10+
+     * 后台启动 Activity 限制；未授权则提示跳设置）。返回动作供 UI 反馈。
+     */
+    fun installDownloadedApk(context: Context, uri: Uri): InstallAction {
+        val appCtx = context.applicationContext
+        if (!canInstallPackages(appCtx)) return InstallAction.NeedPermission
+        if (isAppForeground(appCtx)) {
+            installApk(appCtx, uri)
+            return InstallAction.Installing
+        }
+        notifyInstallPrompt(appCtx, uri)
+        return InstallAction.PromptedByNotification
+    }
+
+    /** 应用是否处于前台（用于判断能否直接拉起安装器）。 */
+    private fun isAppForeground(context: Context): Boolean {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return false
+        return try {
+            am.appTasks.any { it.taskInfo?.topActivity?.packageName == context.packageName }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+    /** 后台场景：发「更新已下载，点击安装」通知，PendingIntent 豁免后台启动限制。 */
+    private fun notifyInstallPrompt(context: Context, uri: Uri) {
+        val appCtx = context.applicationContext
+        val nm = appCtx.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        val channelId = "update_channel"
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            nm.createNotificationChannel(
+                NotificationChannel(channelId, "更新提醒", NotificationManager.IMPORTANCE_HIGH),
+            )
+        }
+        val installIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            setDataAndType(uri, "application/vnd.android.package-archive")
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        val pi = PendingIntent.getActivity(
+            appCtx,
+            1,
+            installIntent,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notif = NotificationCompat.Builder(appCtx, channelId)
+            .setContentTitle("快搜 更新下载完成")
+            .setContentText("点击安装新版本")
+            .setSmallIcon(android.R.drawable.stat_sys_download_done)
+            .setAutoCancel(true)
+            .setContentIntent(pi)
+            .build()
+        try {
+            nm.notify(1002, notif)
+        } catch (_: Exception) {
+            // 通知权限缺失等极端情况：静默失败
+        }
     }
 
     /** 拉起系统「安装未知应用」设置页（Android O+）。 */
