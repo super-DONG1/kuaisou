@@ -3,6 +3,7 @@ package com.kuaishou.app.engine
 import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import com.kuaishou.app.data.Platform
 
@@ -20,7 +21,10 @@ sealed class JumpResult {
 
 /**
  * 跳转引擎：开启“优先唤起App”时（默认开启）先精确唤起本地 App：
- * ① 带包名精确唤起 → ② 系统解析唤起 → 均失败弹兜底抽屉（复制/网页版/首页）。
+ * ① 主包精确唤起（已安装才尝试，未注册 scheme 会继续往下走）
+ * ② 兜底包（如抖音主 App 缺失时唤起抖音极速版）：先查是否已安装，再试搜索协议，
+ *    协议未注册则直接打开该 App 主页 —— 保证「无抖音、有极速版」时点击抖音能跳进极速版
+ * ③ 系统解析唤起 → 均失败弹兜底抽屉（复制/网页版/首页）。
  * 关闭该偏好时直接打开网页搜索 URL，保证“直达搜索结果页”。
  */
 class JumpEngine(private val context: Context) {
@@ -32,28 +36,39 @@ class JumpEngine(private val context: Context) {
             // ① 带包名精确唤起（命中该 App 的 scheme 处理器）
             if (platform.packageName != null) {
                 val preciseIntent = Intent(Intent.ACTION_VIEW, Uri.parse(deepLink))
-                    .setPackage(platform.packageName)
-                try {
-                    context.startActivity(preciseIntent)
-                    return JumpResult.LaunchedApp
-                } catch (e: ActivityNotFoundException) {
-                    // 主包未安装 / 未注册该 scheme：依次尝试兜底包（如抖音极速版）
-                    for (pkg in platform.fallbackPackages) {
-                        try {
-                            context.startActivity(preciseIntent.setPackage(pkg))
-                            return JumpResult.LaunchedApp
-                        } catch (e2: ActivityNotFoundException) {
-                            // 该兜底包也不可用，继续尝试下一个
-                        } catch (e2: SecurityException) {
-                            return JumpResult.Failed(platform, keyword)
-                        }
+                if (isPackageInstalled(platform.packageName)) {
+                    try {
+                        context.startActivity(preciseIntent.setPackage(platform.packageName))
+                        return JumpResult.LaunchedApp
+                    } catch (e: ActivityNotFoundException) {
+                        // 主包已安装但未注册该 scheme（极少见），继续尝试兜底
+                    } catch (e: SecurityException) {
+                        return JumpResult.Failed(platform, keyword)
                     }
-                    // 全部兜底包失败，回落到系统解析
-                } catch (e: SecurityException) {
-                    return JumpResult.Failed(platform, keyword)
+                }
+                // ② 依次尝试兜底包（如抖音极速版）：已安装 → 试搜索协议 → 未注册则打开 App 主页
+                for (pkg in platform.fallbackPackages) {
+                    if (!isPackageInstalled(pkg)) continue
+                    try {
+                        context.startActivity(preciseIntent.setPackage(pkg))
+                        return JumpResult.LaunchedApp
+                    } catch (e: ActivityNotFoundException) {
+                        // 该兜底包未注册搜索协议：退而打开其 App 主页，同样算「跳转到该 App」
+                        val launch = context.packageManager.getLaunchIntentForPackage(pkg)
+                        if (launch != null) {
+                            try {
+                                context.startActivity(launch)
+                                return JumpResult.LaunchedApp
+                            } catch (e2: Exception) {
+                                // 启动主页也失败，尝试下一个兜底包
+                            }
+                        }
+                    } catch (e: SecurityException) {
+                        return JumpResult.Failed(platform, keyword)
+                    }
                 }
             }
-            // ② 系统解析唤起
+            // ③ 系统解析唤起
             val systemIntent = Intent(Intent.ACTION_VIEW, Uri.parse(deepLink))
             return try {
                 context.startActivity(systemIntent)
@@ -76,6 +91,17 @@ class JumpEngine(private val context: Context) {
     /** 打开平台首页（兜底抽屉的“打开抖音首页”）。 */
     fun openPlatformHome(platform: Platform) {
         openWebUrl(platform.homeUrl)
+    }
+
+    /**
+     * 包是否已安装。Android 11+ 受包可见性限制：未在 Manifest <queries> 声明的包
+     * 即使已安装也会查不到 —— 抖音极速版必须声明，否则兜底唤起必然失败。
+     */
+    private fun isPackageInstalled(pkg: String): Boolean = try {
+        context.packageManager.getPackageInfo(pkg, 0)
+        true
+    } catch (e: PackageManager.NameNotFoundException) {
+        false
     }
 
     private fun openWebUrl(url: String) {
