@@ -11,10 +11,10 @@ android {
         applicationId = "com.kuaishou.app"
         minSdk = 24
         targetSdk = 37
-        // 版本号规则：MAJOR.MINOR.PATCH-MMDD（如 2.0.3-1014 = 2.0.3 版、10-14 构建）
+        // 版本号规则：MAJOR.MINOR.PATCH-MMDD（如 2.0.4-1016 = 2.0.4 版、10-16 构建）
         // versionCode 取 MAJOR*1000000 + MINOR*1000 + PATCH，保证随版本号单调递增（Android 升级要求）
-        versionCode = 2000003
-        versionName = "2.0.3-1014"
+        versionCode = 2000004
+        versionName = "2.0.4-1016"
     }
 
     buildTypes {

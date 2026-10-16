@@ -28,6 +28,17 @@ data class VersionLog(
 /** 版本迭代记录列表（newest first）。 */
 val versionLogs: List<VersionLog> = listOf(
     VersionLog(
+        version = "2.0.4-1016",
+        date = "2026-10-16",
+        changes = listOf(
+            // ---- 修复 ----
+            ChangeItem(ChangeType.Fix, "修复抖音极速版兜底未生效：补充 Android 11+ 包可见性声明，未装抖音、装有抖音极速版时点击抖音可唤起极速版；极速版未注册搜索协议时自动打开其 App 主页兜底。"),
+            ChangeItem(ChangeType.Fix, "修复下载后自动安装失效：下载完成广播改为先注册后入队避免漏收，兼容部分 ROM 返回空路径的问题；应用在前台直接拉起安装、在后台通过「点击安装」通知引导（规避系统后台启动限制），未授权「安装未知应用」时自动跳转系统设置页。"),
+            // ---- 优化 ----
+            ChangeItem(ChangeType.Optimize, "发现新版本弹窗重做：更新说明限高滚动不再与按钮重叠，仅保留「更新 / 取消」两个按钮，「更新」一键完成下载与自动安装。"),
+        ),
+    ),
+    VersionLog(
         version = "2.0.3-1014",
         date = "2026-10-14",
         changes = listOf(
